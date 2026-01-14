@@ -66,32 +66,6 @@ func RegisterValidations(scheme *runtime.Scheme) error {
 	return nil
 }
 
-// Validate_IPBlock validates an instance of IPBlock according
-// to declarative validation rules in the API schema.
-func Validate_IPBlock(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *networkingv1.IPBlock) (errs field.ErrorList) {
-	// field networkingv1.IPBlock.CIDR
-	errs = append(errs,
-		func(fldPath *field.Path, obj, oldObj *string, oldValueCorrelated bool) (errs field.ErrorList) {
-			// don't revalidate unchanged data
-			if oldValueCorrelated && op.Type == operation.Update && (obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj)) {
-				return nil
-			}
-			// call field-attached validations
-			earlyReturn := false
-			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
-				errs = append(errs, e...)
-				earlyReturn = true
-			}
-			if earlyReturn {
-				return // do not proceed
-			}
-			return
-		}(fldPath.Child("cidr"), &obj.CIDR, safe.Field(oldObj, func(oldObj *networkingv1.IPBlock) *string { return &oldObj.CIDR }), oldObj != nil)...)
-
-	// field networkingv1.IPBlock.Except has no validation
-	return errs
-}
-
 // Validate_IPAddress validates an instance of IPAddress according
 // to declarative validation rules in the API schema.
 func Validate_IPAddress(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *networkingv1.IPAddress) (errs field.ErrorList) {
@@ -141,6 +115,32 @@ func Validate_IPAddressSpec(ctx context.Context, op operation.Operation, fldPath
 			return
 		}(fldPath.Child("parentRef"), obj.ParentRef, safe.Field(oldObj, func(oldObj *networkingv1.IPAddressSpec) *networkingv1.ParentReference { return oldObj.ParentRef }), oldObj != nil)...)
 
+	return errs
+}
+
+// Validate_IPBlock validates an instance of IPBlock according
+// to declarative validation rules in the API schema.
+func Validate_IPBlock(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *networkingv1.IPBlock) (errs field.ErrorList) {
+	// field networkingv1.IPBlock.CIDR
+	errs = append(errs,
+		func(fldPath *field.Path, obj, oldObj *string, oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update && (obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj)) {
+				return nil
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			return
+		}(fldPath.Child("cidr"), &obj.CIDR, safe.Field(oldObj, func(oldObj *networkingv1.IPBlock) *string { return &oldObj.CIDR }), oldObj != nil)...)
+
+	// field networkingv1.IPBlock.Except has no validation
 	return errs
 }
 
