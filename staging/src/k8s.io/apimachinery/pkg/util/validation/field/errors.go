@@ -56,8 +56,8 @@ type Error struct {
 	// that should also be caught by declarative validation.
 	CoveredByDeclarative bool
 
-	// OriginatingFromImperative denotes these errors are originating from  the hand written validations.
-	OriginatingFromImperative bool
+	// FromImperative denotes these errors are originating from  the hand written validations.
+	FromImperative bool
 
 	// ValidationStabilityLevel denotes the validation stability level of the declarative validation from this error is returned. This should be used in the declarative validations only.
 	ValidationStabilityLevel ValidationStabilityLevel
@@ -511,14 +511,14 @@ func (list ErrorList) MarkBeta() ErrorList {
 	return list
 }
 
-func (e *Error) MarkOriginatingFromImperative() *Error {
-	e.OriginatingFromImperative = true
+func (e *Error) MarkFromImperative() *Error {
+	e.FromImperative = true
 	return e
 }
 
-func (list ErrorList) MarkOriginatingFromImperative() ErrorList {
+func (list ErrorList) MarkFromImperative() ErrorList {
 	for _, err := range list {
-		err.OriginatingFromImperative = true
+		err.FromImperative = true
 	}
 	return list
 }
