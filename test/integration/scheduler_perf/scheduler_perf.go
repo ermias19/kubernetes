@@ -1095,7 +1095,6 @@ func runWorkload(tCtx ktesting.TContext, tc *testCase, w *workload, topicName st
 	tCtx = tCtx.WithCancel()
 
 	executor := WorkloadExecutor{
-		tCtx:                         tCtx,
 		scheduler:                    scheduler,
 		numPodsScheduledPerNamespace: make(map[string]int),
 		podInformer:                  podInformer,
@@ -1120,7 +1119,7 @@ func runWorkload(tCtx ktesting.TContext, tc *testCase, w *workload, topicName st
 			return nil, fmt.Errorf("op %d: %w", opIndex, context.Cause(tCtx))
 		default:
 		}
-		err = executor.runOp(realOp, opIndex)
+		err = executor.runOp(tCtx, realOp, opIndex)
 		if err != nil {
 			return nil, fmt.Errorf("op %d: %w", opIndex, err)
 		}

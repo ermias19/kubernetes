@@ -218,12 +218,11 @@ func TestRunOp(t *testing.T) {
 			tCtx = tCtx.WithClients(nil, nil, client, nil, nil)
 
 			exec := &WorkloadExecutor{
-				tCtx:                         tCtx,
 				numPodsScheduledPerNamespace: make(map[string]int),
 				nextNodeIndex:                0,
 			}
 
-			err := exec.runOp(tt.op, 0)
+			err := exec.runOp(tCtx, tt.op, 0)
 
 			if tt.expectedFailure {
 				if err == nil {
@@ -640,7 +639,6 @@ func TestMetricThreshold(t *testing.T) {
 			exec := &WorkloadExecutor{
 				topicName:                    "example",
 				testCase:                     &testCase{},
-				tCtx:                         capturingCtx,
 				numPodsScheduledPerNamespace: make(map[string]int),
 				workload:                     workload,
 			}
@@ -650,12 +648,12 @@ func TestMetricThreshold(t *testing.T) {
 				Name:       "test-collection",
 				Namespaces: []string{"test-namespaces"},
 			}
-			err := exec.runOp(start, 0)
+			err := exec.runOp(capturingCtx, start, 0)
 			if err != nil {
 				t.Fatalf("Failed to start metric collection")
 			}
 			stop := &stopCollectingMetricsOp{Opcode: stopCollectingMetricsOpcode}
-			err = exec.runOp(stop, 0)
+			err = exec.runOp(capturingCtx, stop, 0)
 			if err != nil {
 				t.Fatalf("Failed to stop metric collection")
 			}
