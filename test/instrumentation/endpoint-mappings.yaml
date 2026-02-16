@@ -45,7 +45,6 @@ standaloneComponents:
 
 # Shared paths: metrics from these paths are available across ALL core components.
 sharedPaths:
-  - "staging/src/k8s.io/client-go/"
   - "staging/src/k8s.io/component-base/"
 
 # Endpoint mappings: override the default endpoint for specific paths.
