@@ -173,6 +173,14 @@ func Validate_BasicDevice(ctx context.Context, op operation.Operation, fldPath *
 			if oldValueCorrelated && op.Type == operation.Update && equality.Semantic.DeepEqual(obj, oldObj) {
 				return nil
 			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.OptionalMap(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
 			// iterate the map and call the value type's validation function
 			errs = append(errs, validate.EachMapVal(ctx, op, fldPath, obj, oldObj, validate.SemanticDeepEqual, Validate_DeviceAttribute)...)
 			return
@@ -224,6 +232,14 @@ func Validate_BasicDevice(ctx context.Context, op operation.Operation, fldPath *
 			// don't revalidate unchanged data
 			if oldValueCorrelated && op.Type == operation.Update && equality.Semantic.DeepEqual(obj, oldObj) {
 				return nil
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.OptionalSlice(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
 			}
 			// iterate the list and call the type's validation function
 			errs = append(errs, validate.EachSliceVal(ctx, op, fldPath, obj, oldObj, nil, nil, Validate_DeviceTaint)...)
@@ -1075,6 +1091,14 @@ func Validate_DeviceRequest(ctx context.Context, op operation.Operation, fldPath
 			if oldValueCorrelated && op.Type == operation.Update && equality.Semantic.DeepEqual(obj, oldObj) {
 				return nil
 			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.OptionalSlice(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
 			// iterate the list and call the type's validation function
 			errs = append(errs, validate.EachSliceVal(ctx, op, fldPath, obj, oldObj, nil, nil, Validate_DeviceToleration)...)
 			return
@@ -1268,6 +1292,9 @@ func Validate_DeviceSubRequest(ctx context.Context, op operation.Operation, fldP
 				errs = append(errs, e...)
 				earlyReturn = true
 			}
+			if e := validate.OptionalSlice(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				earlyReturn = true
+			}
 			if earlyReturn {
 				return // do not proceed
 			}
@@ -1282,6 +1309,14 @@ func Validate_DeviceSubRequest(ctx context.Context, op operation.Operation, fldP
 			// don't revalidate unchanged data
 			if oldValueCorrelated && op.Type == operation.Update && (obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj)) {
 				return nil
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.OptionalValue(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
 			}
 			// call the type's validation function
 			errs = append(errs, Validate_DeviceAllocationMode(ctx, op, fldPath, obj, oldObj)...)
@@ -1298,6 +1333,14 @@ func Validate_DeviceSubRequest(ctx context.Context, op operation.Operation, fldP
 			// don't revalidate unchanged data
 			if oldValueCorrelated && op.Type == operation.Update && equality.Semantic.DeepEqual(obj, oldObj) {
 				return nil
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.OptionalSlice(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
 			}
 			// iterate the list and call the type's validation function
 			errs = append(errs, validate.EachSliceVal(ctx, op, fldPath, obj, oldObj, nil, nil, Validate_DeviceToleration)...)
@@ -1380,6 +1423,16 @@ func Validate_DeviceToleration(ctx context.Context, op operation.Operation, fldP
 			if oldValueCorrelated && op.Type == operation.Update && (obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj)) {
 				return nil
 			}
+			// call field-attached validations
+			earlyReturn := false
+			// optional fields with default values are effectively required
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
 			// call the type's validation function
 			errs = append(errs, Validate_DeviceTolerationOperator(ctx, op, fldPath, obj, oldObj)...)
 			return
@@ -1395,6 +1448,14 @@ func Validate_DeviceToleration(ctx context.Context, op operation.Operation, fldP
 			// don't revalidate unchanged data
 			if oldValueCorrelated && op.Type == operation.Update && (obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj)) {
 				return nil
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.OptionalValue(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
 			}
 			// call the type's validation function
 			errs = append(errs, Validate_DeviceTaintEffect(ctx, op, fldPath, obj, oldObj)...)

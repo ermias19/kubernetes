@@ -452,7 +452,6 @@ function codegen::validation() {
         time
     )
 
-
     local lint_tag_pkgs=()
     for pkg in "${tag_pkgs[@]}"; do
         if [[ "${pkg}" != *"staging/src/k8s.io/code-generator/cmd/validation-gen/output_tests"* ]]; then
@@ -467,7 +466,7 @@ function codegen::validation() {
         --output-file "${output_file}" \
         $(printf -- " --readonly-pkg %s" "${readonly_pkgs[@]}") \
         --lint \
-        --dv-enforced-roots k8s.io/api/scheduling/v1alpha1.Workload \
+        --dv-enforced-root k8s.io/api/scheduling/v1alpha1.Workload \
         "${lint_tag_pkgs[@]}" \
         "$@"
 

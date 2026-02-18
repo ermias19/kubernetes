@@ -328,6 +328,14 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 				},
 			})),
 		},
+		"invalid DeviceTolerationOperator empty - Exactly": {
+			input: mkValidResourceClaim(
+				tweakExactlyTolerations([]resource.DeviceToleration{{Key: "key", Value: "value", Effect: resource.DeviceTaintEffectNoSchedule, Operator: ""}}),
+			),
+			expectedErrs: field.ErrorList{
+				field.Required(field.NewPath("spec", "devices", "requests").Index(0).Child("exactly", "tolerations").Index(0).Child("operator"), ""),
+			},
+		},
 		"invalid DeviceTolerationOperator - Exactly": {
 			input: mkValidResourceClaim(tweakExactlyTolerations([]resource.DeviceToleration{
 				{
@@ -371,6 +379,15 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 					Effect:   resource.DeviceTaintEffectNoSchedule,
 				},
 			})),
+		},
+		"invalid DeviceTolerationOperator empty - FirstAvailable": {
+			input: mkValidResourceClaim(
+				tweakFirstAvailable(1),
+				tweakFirstAvailableTolerations([]resource.DeviceToleration{{Key: "key", Value: "value", Effect: resource.DeviceTaintEffectNoSchedule, Operator: ""}}),
+			),
+			expectedErrs: field.ErrorList{
+				field.Required(field.NewPath("spec", "devices", "requests").Index(0).Child("firstAvailable").Index(0).Child("tolerations").Index(0).Child("operator"), ""),
+			},
 		},
 		"invalid DeviceTolerationOperator - FirstAvailable": {
 			input: mkValidResourceClaim(tweakFirstAvailable(1), tweakFirstAvailableTolerations([]resource.DeviceToleration{
