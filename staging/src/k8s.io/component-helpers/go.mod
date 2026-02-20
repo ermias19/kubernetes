@@ -7,7 +7,6 @@ go 1.25.0
 godebug default=go1.25
 
 require (
-	github.com/google/go-cmp v0.7.0
 	github.com/stretchr/testify v1.11.1
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
