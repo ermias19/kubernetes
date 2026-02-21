@@ -67,7 +67,7 @@ func populateEtcdForRepairTest(t *testing.T, etcdOptions *storagebackend.Config,
 
 	// Create many namespaces directly in etcd to simulate a large cluster
 	// This causes the namespace informer to take significant time to sync on startup
-	for i := 0; i < numNamespaces; i++ {
+	for i := range numNamespaces {
 		ns := &v1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:              fmt.Sprintf("bulk-ns-%d", i),
