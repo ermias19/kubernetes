@@ -19,10 +19,12 @@ package fake
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	cgtesting "k8s.io/client-go/testing"
 )
 
@@ -44,5 +46,62 @@ func TestFakePodsGetLogs(t *testing.T) {
 	err = body.Close()
 	if err != nil {
 		t.Fatal("Close response body:", err)
+	}
+}
+
+func TestFakePodsGetLogsReactorError(t *testing.T) {
+	fake := &cgtesting.Fake{}
+	fp := newFakePods(&FakeCoreV1{Fake: fake}, "default")
+	expectedErr := errors.New("reactor get logs failure")
+	fake.PrependReactor("get", "pods/log", func(action cgtesting.Action) (bool, runtime.Object, error) {
+		getAction, ok := action.(cgtesting.GetAction)
+		if !ok {
+			t.Fatalf("expected GetAction, got %T", action)
+		}
+		if getAction.GetName() != "foo" {
+			t.Fatalf("expected pod name foo, got %q", getAction.GetName())
+		}
+		genericAction, ok := action.(cgtesting.GenericAction)
+		if !ok {
+			t.Fatalf("expected GenericAction, got %T", action)
+		}
+		opts, ok := genericAction.GetValue().(*corev1.PodLogOptions)
+		if !ok {
+			t.Fatalf("expected *corev1.PodLogOptions, got %T", genericAction.GetValue())
+		}
+		if opts.Container != "ctr" {
+			t.Fatalf("expected container ctr, got %q", opts.Container)
+		}
+		return true, nil, expectedErr
+	})
+
+	req := fp.GetLogs("foo", &corev1.PodLogOptions{Container: "ctr"})
+	_, err := req.Stream(context.Background())
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected stream error %v, got %v", expectedErr, err)
+	}
+}
+
+func TestFakePodsGetLogsReactorResponse(t *testing.T) {
+	fake := &cgtesting.Fake{}
+	fp := newFakePods(&FakeCoreV1{Fake: fake}, "default")
+	expectedLogs := "reactor logs"
+	fake.PrependReactor("get", "pods/log", func(action cgtesting.Action) (bool, runtime.Object, error) {
+		return true, &runtime.Unknown{Raw: []byte(expectedLogs)}, nil
+	})
+
+	req := fp.GetLogs("foo", &corev1.PodLogOptions{})
+	body, err := req.Stream(context.Background())
+	if err != nil {
+		t.Fatalf("Stream pod logs: %v", err)
+	}
+	defer body.Close()
+
+	logs, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("Read pod logs: %v", err)
+	}
+	if string(logs) != expectedLogs {
+		t.Fatalf("expected logs %q, got %q", expectedLogs, string(logs))
 	}
 }

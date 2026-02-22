@@ -17,16 +17,17 @@ limitations under the License.
 package fake
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 
 	v1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	restclient "k8s.io/client-go/rest"
 	fakerest "k8s.io/client-go/rest/fake"
@@ -55,20 +56,45 @@ func (c *fakePods) GetBinding(name string) (result *v1.Binding, err error) {
 	return obj.(*v1.Binding), err
 }
 
-func (c *fakePods) GetLogs(name string, opts *v1.PodLogOptions) *restclient.Request {
-	action := core.GenericActionImpl{}
-	action.Verb = "get"
-	action.Namespace = c.Namespace()
-	action.Resource = c.Resource()
-	action.Subresource = "log"
-	action.Value = opts
+// getPodLogsActionImpl carries the standard get action shape (including pod name)
+// along with pod log options so reactors can inspect both.
+type getPodLogsActionImpl struct {
+	core.GetActionImpl
+	Value interface{}
+}
 
-	_, _ = c.Fake.Invokes(action, &v1.Pod{})
+func (a getPodLogsActionImpl) GetValue() interface{} {
+	return a.Value
+}
+
+func (a getPodLogsActionImpl) DeepCopy() core.Action {
+	return getPodLogsActionImpl{
+		GetActionImpl: a.GetActionImpl.DeepCopy().(core.GetActionImpl),
+		// Keep existing fake GenericAction semantics for value copying.
+		Value: a.Value,
+	}
+}
+
+func (c *fakePods) GetLogs(name string, opts *v1.PodLogOptions) *restclient.Request {
+	action := getPodLogsActionImpl{
+		GetActionImpl: core.NewGetSubresourceAction(c.Resource(), c.Namespace(), "log", name),
+		Value:         opts,
+	}
+
+	obj, err := c.Fake.Invokes(action, &runtime.Unknown{Raw: []byte("fake logs")})
+	logs := []byte("fake logs")
+	if unknown, ok := obj.(*runtime.Unknown); ok && unknown != nil {
+		logs = unknown.Raw
+	}
+
 	fakeClient := &fakerest.RESTClient{
 		Client: fakerest.CreateHTTPClient(func(request *http.Request) (*http.Response, error) {
+			if err != nil {
+				return nil, err
+			}
 			resp := &http.Response{
 				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader("fake logs")),
+				Body:       io.NopCloser(bytes.NewReader(logs)),
 			}
 			return resp, nil
 		}),
