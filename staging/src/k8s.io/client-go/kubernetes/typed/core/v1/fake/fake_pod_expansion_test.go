@@ -54,13 +54,6 @@ func TestFakePodsGetLogsReactorError(t *testing.T) {
 	fp := newFakePods(&FakeCoreV1{Fake: fake}, "default")
 	expectedErr := errors.New("reactor get logs failure")
 	fake.PrependReactor("get", "pods/log", func(action cgtesting.Action) (bool, runtime.Object, error) {
-		getAction, ok := action.(cgtesting.GetAction)
-		if !ok {
-			t.Fatalf("expected GetAction, got %T", action)
-		}
-		if getAction.GetName() != "foo" {
-			t.Fatalf("expected pod name foo, got %q", getAction.GetName())
-		}
 		genericAction, ok := action.(cgtesting.GenericAction)
 		if !ok {
 			t.Fatalf("expected GenericAction, got %T", action)
@@ -95,7 +88,11 @@ func TestFakePodsGetLogsReactorResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stream pod logs: %v", err)
 	}
-	defer body.Close()
+	defer func() {
+		if err := body.Close(); err != nil {
+			t.Fatalf("Close response body: %v", err)
+		}
+	}()
 
 	logs, err := io.ReadAll(body)
 	if err != nil {

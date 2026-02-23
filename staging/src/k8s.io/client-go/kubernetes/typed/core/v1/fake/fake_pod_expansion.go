@@ -56,30 +56,13 @@ func (c *fakePods) GetBinding(name string) (result *v1.Binding, err error) {
 	return obj.(*v1.Binding), err
 }
 
-// getPodLogsActionImpl carries the standard get action shape (including pod name)
-// along with pod log options so reactors can inspect both.
-type getPodLogsActionImpl struct {
-	core.GetActionImpl
-	Value interface{}
-}
-
-func (a getPodLogsActionImpl) GetValue() interface{} {
-	return a.Value
-}
-
-func (a getPodLogsActionImpl) DeepCopy() core.Action {
-	return getPodLogsActionImpl{
-		GetActionImpl: a.GetActionImpl.DeepCopy().(core.GetActionImpl),
-		// Keep existing fake GenericAction semantics for value copying.
-		Value: a.Value,
-	}
-}
-
 func (c *fakePods) GetLogs(name string, opts *v1.PodLogOptions) *restclient.Request {
-	action := getPodLogsActionImpl{
-		GetActionImpl: core.NewGetSubresourceAction(c.Resource(), c.Namespace(), "log", name),
-		Value:         opts,
-	}
+	action := core.GenericActionImpl{}
+	action.Verb = "get"
+	action.Namespace = c.Namespace()
+	action.Resource = c.Resource()
+	action.Subresource = "log"
+	action.Value = opts
 
 	obj, err := c.Fake.Invokes(action, &runtime.Unknown{Raw: []byte("fake logs")})
 	logs := []byte("fake logs")
