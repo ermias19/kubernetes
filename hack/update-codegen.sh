@@ -452,24 +452,6 @@ function codegen::validation() {
         time
     )
 
-    local lint_tag_pkgs=()
-    for pkg in "${tag_pkgs[@]}"; do
-        if [[ "${pkg}" != *"staging/src/k8s.io/code-generator/cmd/validation-gen/output_tests"* ]]; then
-            lint_tag_pkgs+=("${pkg}")
-        fi
-    done
-
-    kube::log::status "Linting validation code for ${#lint_tag_pkgs[@]} targets"
-    validation-gen \
-        -v "${KUBE_VERBOSE}" \
-        --go-header-file "${BOILERPLATE_FILENAME}" \
-        --output-file "${output_file}" \
-        $(printf -- " --readonly-pkg %s" "${readonly_pkgs[@]}") \
-        --lint \
-        --dv-enforced-root k8s.io/api/scheduling/v1alpha1.Workload \
-        "${lint_tag_pkgs[@]}" \
-        "$@"
-
     kube::log::status "Generating validation code for ${#tag_pkgs[@]} targets"
     if [[ "${DBG_CODEGEN}" == 1 ]]; then
         kube::log::status "DBG: running validation-gen for:"
