@@ -56,7 +56,7 @@ var symbolsForAddressType = sets.New(discoveryv1.AddressTypeFQDN, discoveryv1.Ad
 // Validate_AddressType validates an instance of AddressType according
 // to declarative validation rules in the API schema.
 func Validate_AddressType(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *discoveryv1.AddressType) (errs field.ErrorList) {
-	errs = append(errs, validate.Enum(ctx, op, fldPath, obj, oldObj, symbolsForAddressType, nil)...)
+	errs = append(errs, validate.Enum(ctx, op, fldPath, obj, oldObj, symbolsForAddressType, nil).MarkAlpha()...)
 
 	return errs
 }
@@ -73,11 +73,11 @@ func Validate_Endpoint(ctx context.Context, op operation.Operation, fldPath *fie
 			}
 			// call field-attached validations
 			earlyReturn := false
-			if e := validate.MaxItems(ctx, op, fldPath, obj, oldObj, 100); len(e) != 0 {
+			if e := validate.RequiredSlice(ctx, op, fldPath, obj, oldObj).MarkAlpha(); len(e) != 0 {
 				errs = append(errs, e...)
 				earlyReturn = true
 			}
-			if e := validate.RequiredSlice(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+			if e := validate.MaxItems(ctx, op, fldPath, obj, oldObj, 100).MarkAlpha(); len(e) != 0 {
 				errs = append(errs, e...)
 				earlyReturn = true
 			}
@@ -112,11 +112,11 @@ func Validate_EndpointSlice(ctx context.Context, op operation.Operation, fldPath
 			}
 			// call field-attached validations
 			earlyReturn := false
-			if e := validate.Immutable(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkAlpha(); len(e) != 0 {
 				errs = append(errs, e...)
 				earlyReturn = true
 			}
-			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+			if e := validate.Immutable(ctx, op, fldPath, obj, oldObj).MarkAlpha(); len(e) != 0 {
 				errs = append(errs, e...)
 				earlyReturn = true
 			}
@@ -137,7 +137,7 @@ func Validate_EndpointSlice(ctx context.Context, op operation.Operation, fldPath
 			}
 			// call field-attached validations
 			earlyReturn := false
-			if e := validate.OptionalSlice(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+			if e := validate.OptionalSlice(ctx, op, fldPath, obj, oldObj).MarkAlpha(); len(e) != 0 {
 				earlyReturn = true
 			}
 			if earlyReturn {
