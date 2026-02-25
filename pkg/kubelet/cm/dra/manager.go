@@ -416,7 +416,7 @@ func (m *Manager) prepareResources(ctx context.Context, pod *v1.Pod) error {
 			err := m.cache.withLock(logger, func() error {
 				info, exists := m.cache.get(claim.Name, claim.Namespace)
 				if !exists {
-					return fmt.Errorf("internal error: unable to get claim info for ResourceClaim %s", claim.Name)
+					return fmt.Errorf("internal error: unable to get claim info for ResourceClaim %s in namespace %s", claim.Name, claim.Namespace)
 				}
 				for _, device := range result.GetDevices() {
 					info.addDevice(plugin.DriverName(), state.Device{PoolName: device.PoolName,
@@ -443,7 +443,7 @@ func (m *Manager) prepareResources(ctx context.Context, pod *v1.Pod) error {
 		for _, claim := range resourceClaims {
 			info, exists := m.cache.get(claim.Name, claim.Namespace)
 			if !exists {
-				return fmt.Errorf("internal error: unable to get claim info for ResourceClaim %s", claim.Name)
+				return fmt.Errorf("internal error: unable to get claim info for ResourceClaim %s in namespace %s", claim.Name, claim.Namespace)
 			}
 			info.setPrepared()
 		}
@@ -541,7 +541,7 @@ func (m *Manager) GetResources(pod *v1.Pod, container *v1.Container) (*Container
 		err := m.cache.withRLock(func() error {
 			claimInfo, exists := m.cache.get(claimName, pod.Namespace)
 			if !exists {
-				return fmt.Errorf("internal error: unable to get claim info for ResourceClaim %s", claimName)
+				return fmt.Errorf("internal error: unable to get claim info for ResourceClaim %s in namespace %s", claimName, pod.Namespace)
 			}
 
 			for _, requestName := range requestNames {
