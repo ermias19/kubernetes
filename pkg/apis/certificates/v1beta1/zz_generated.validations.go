@@ -109,7 +109,7 @@ func Validate_CertificateSigningRequestStatus(ctx context.Context, op operation.
 					}
 				}
 				return false
-			})...)
+			}).MarkAlpha()...)
 			return
 		}(fldPath.Child("conditions"), obj.Conditions, safe.Field(oldObj, func(oldObj *certificatesv1beta1.CertificateSigningRequestStatus) []certificatesv1beta1.CertificateSigningRequestCondition {
 			return oldObj.Conditions
