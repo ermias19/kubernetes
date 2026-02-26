@@ -165,9 +165,7 @@ func populateEtcdForRepairTest(t *testing.T, etcdOptions *storagebackend.Config,
 //
 // This test takes a long time to run (~30 minutes to populate etcd) but reproduces the issue with realistic load.
 func TestServiceIPRepairRaceCondition(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping: takes 30+ minutes to load 330000 testing namespace data into etcd")
-	}
+	t.Skip("reproducer for https://issues.k8s.io/136288")
 
 	// Setup etcd
 	etcdOptions := framework.SharedEtcd()
