@@ -64,10 +64,16 @@ func (c *fakePods) GetLogs(name string, opts *v1.PodLogOptions) *restclient.Requ
 	action.Subresource = "log"
 	action.Value = opts
 
-	obj, err := c.Fake.Invokes(action, &runtime.Unknown{Raw: []byte("fake logs")})
-	logs := []byte("fake logs")
-	if unknown, ok := obj.(*runtime.Unknown); ok && unknown != nil {
-		logs = unknown.Raw
+	defaultLogResponse := &runtime.Unknown{Raw: []byte("fake logs")}
+	obj, err := c.Fake.Invokes(action, defaultLogResponse)
+	logs := defaultLogResponse.Raw
+	if err == nil {
+		unknown, ok := obj.(*runtime.Unknown)
+		if !ok || unknown == nil {
+			err = fmt.Errorf("fake Pods.GetLogs expected reactor to return *runtime.Unknown, got %T", obj)
+		} else {
+			logs = unknown.Raw
+		}
 	}
 
 	fakeClient := &fakerest.RESTClient{

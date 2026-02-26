@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -100,5 +101,22 @@ func TestFakePodsGetLogsReactorResponse(t *testing.T) {
 	}
 	if string(logs) != expectedLogs {
 		t.Fatalf("expected logs %q, got %q", expectedLogs, string(logs))
+	}
+}
+
+func TestFakePodsGetLogsReactorInvalidObject(t *testing.T) {
+	fake := &cgtesting.Fake{}
+	fp := newFakePods(&FakeCoreV1{Fake: fake}, "default")
+	fake.PrependReactor("get", "pods/log", func(action cgtesting.Action) (bool, runtime.Object, error) {
+		return true, &corev1.Pod{}, nil
+	})
+
+	req := fp.GetLogs("foo", &corev1.PodLogOptions{})
+	_, err := req.Stream(context.Background())
+	if err == nil {
+		t.Fatal("expected stream error")
+	}
+	if !strings.Contains(err.Error(), "expected reactor to return *runtime.Unknown") {
+		t.Fatalf("expected helpful reactor object type error, got: %v", err)
 	}
 }
