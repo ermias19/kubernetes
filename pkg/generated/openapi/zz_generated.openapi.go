@@ -69096,7 +69096,7 @@ func schema_kubectl_pkg_config_v1beta1_AllowlistEntry(ref common.ReferenceCallba
 				Properties: map[string]spec.Schema{
 					"name": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Name matching is performed by first resolving the absolute path of both the plugin and the name in the allowlist entry using `exec.LookPath`. It will be called on both, and the resulting strings must be equal. If either call to `exec.LookPath` results in an error, the `Name` check will be considered a failure.",
+							Description: "Name matching is performed by first resolving the absolute path of both the plugin and the name in the allowlist entry using `exec.LookPath`. It will be called on both, and the resulting strings must be equal. If either call to `exec.LookPath` results in an error, the `Name` check will be considered a failure.\n\nDeprecated: use Command instead.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
