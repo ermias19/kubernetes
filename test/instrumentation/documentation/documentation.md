@@ -8,7 +8,7 @@ description: >-
 
 ## Metrics (v1.36)
 
-<!-- (auto-generated 2026 Feb 18) -->
+<!-- (auto-generated 2026 Feb 27) -->
 <!-- (auto-generated v1.36) -->
 This page details the metrics that different Kubernetes components export. You can query the metrics endpoint for these 
 components using an HTTP scrape, and fetch the current metrics data in Prometheus format.
@@ -1264,6 +1264,20 @@ Alpha metrics do not have any API guarantees. These metrics must be used at your
 	<li data-type="counter"><label class="metric_detail">Type:</label> <span class="metric_type">Counter</span></li>
 	<li class="metric_component_endpoints"><label class="metric_detail">Components:</label><ul><li>kube-apiserver (/metrics)</li></ul></li></ul>
 	</div><div class="metric" data-stability="alpha">
+	<div class="metric_name">apiserver_peer_discovery_sync_errors_total</div>
+	<div class="metric_help">Total number of errors encountered while syncing discovery information from a peer kube-apiserver</div>
+	<ul>
+	<li><label class="metric_detail">Stability Level:</label><span class="metric_stability_level">ALPHA</span></li>
+	<li data-type="counter"><label class="metric_detail">Type:</label> <span class="metric_type">Counter</span></li>
+	<li class="metric_labels_varying"><label class="metric_detail">Labels:</label><span class="metric_label">type</span></li><li class="metric_component_endpoints"><label class="metric_detail">Components:</label><ul><li>kube-apiserver (/metrics)</li></ul></li></ul>
+	</div><div class="metric" data-stability="alpha">
+	<div class="metric_name">apiserver_peer_proxy_errors_total</div>
+	<div class="metric_help">Total number of errors encountered while proxying requests to a peer kube apiserver</div>
+	<ul>
+	<li><label class="metric_detail">Stability Level:</label><span class="metric_stability_level">ALPHA</span></li>
+	<li data-type="counter"><label class="metric_detail">Type:</label> <span class="metric_type">Counter</span></li>
+	<li class="metric_labels_varying"><label class="metric_detail">Labels:</label><span class="metric_label">group</span><span class="metric_label">resource</span><span class="metric_label">type</span><span class="metric_label">version</span></li><li class="metric_component_endpoints"><label class="metric_detail">Components:</label><ul><li>kube-apiserver (/metrics)</li></ul></li></ul>
+	</div><div class="metric" data-stability="alpha">
 	<div class="metric_name">apiserver_request_aborts_total</div>
 	<div class="metric_help">Number of requests which apiserver aborted possibly due to a timeout, for each group, version, verb, resource, subresource and scope</div>
 	<ul>
@@ -1677,6 +1691,13 @@ Alpha metrics do not have any API guarantees. These metrics must be used at your
 	<li data-type="histogram"><label class="metric_detail">Type:</label> <span class="metric_type">Histogram</span></li>
 	<li class="metric_labels_varying"><label class="metric_detail">Labels:</label><span class="metric_label">driver_name</span><span class="metric_label">grpc_status_code</span><span class="metric_label">method_name</span><span class="metric_label">migrated</span></li><li class="metric_component_endpoints"><label class="metric_detail">Components:</label><ul><li>kubelet (/metrics)</li></ul></li></ul>
 	</div><div class="metric" data-stability="alpha">
+	<div class="metric_name">daemonset_controller_stale_sync_skips_total</div>
+	<div class="metric_help">Total number of DaemonSet syncs skipped due to a stale watch cache.</div>
+	<ul>
+	<li><label class="metric_detail">Stability Level:</label><span class="metric_stability_level">ALPHA</span></li>
+	<li data-type="counter"><label class="metric_detail">Type:</label> <span class="metric_type">Counter</span></li>
+	<li class="metric_labels_varying"><label class="metric_detail">Labels:</label><span class="metric_label">group</span><span class="metric_label">resource</span></li><li class="metric_component_endpoints"><label class="metric_detail">Components:</label><ul><li>kube-controller-manager (/metrics)</li></ul></li></ul>
+	</div><div class="metric" data-stability="alpha">
 	<div class="metric_name">device_taint_eviction_controller_pod_deletion_duration_seconds</div>
 	<div class="metric_help">Latency, in seconds, between the time when a device taint effect has been activated and a Pod's deletion via DeviceTaintEvictionController.</div>
 	<ul>
@@ -1964,6 +1985,13 @@ Alpha metrics do not have any API guarantees. These metrics must be used at your
 	<li data-type="counter"><label class="metric_detail">Type:</label> <span class="metric_type">Counter</span></li>
 	<li class="metric_labels_varying"><label class="metric_detail">Labels:</label><span class="metric_label">action</span><span class="metric_label">error</span></li><li class="metric_component_endpoints"><label class="metric_detail">Components:</label><ul><li>kube-controller-manager (/metrics)</li></ul></li></ul>
 	</div><div class="metric" data-stability="alpha">
+	<div class="metric_name">informer_processing_latency_seconds</div>
+	<div class="metric_help">Time taken to process events after popping from the queue.</div>
+	<ul>
+	<li><label class="metric_detail">Stability Level:</label><span class="metric_stability_level">ALPHA</span></li>
+	<li data-type="histogram"><label class="metric_detail">Type:</label> <span class="metric_type">Histogram</span></li>
+	<li class="metric_labels_varying"><label class="metric_detail">Labels:</label><span class="metric_label">group</span><span class="metric_label">name</span><span class="metric_label">resource</span><span class="metric_label">version</span></li><li class="metric_component_endpoints"><label class="metric_detail">Components:</label><ul><li>cloud-controller-manager (/metrics)</li><li>kube-apiserver (/metrics)</li><li>kube-controller-manager (/metrics)</li><li>kube-proxy (/metrics)</li><li>kube-scheduler (/metrics)</li><li>kubelet (/metrics)</li></ul></li></ul>
+	</div><div class="metric" data-stability="alpha">
 	<div class="metric_name">informer_queued_items</div>
 	<div class="metric_help">Number of items currently queued in the FIFO.</div>
 	<ul>
@@ -1998,6 +2026,13 @@ Alpha metrics do not have any API guarantees. These metrics must be used at your
 	<li><label class="metric_detail">Stability Level:</label><span class="metric_stability_level">ALPHA</span></li>
 	<li data-type="counter"><label class="metric_detail">Type:</label> <span class="metric_type">Counter</span></li>
 	<li class="metric_labels_varying"><label class="metric_detail">Labels:</label><span class="metric_label">action</span></li><li class="metric_component_endpoints"><label class="metric_detail">Components:</label><ul><li>kube-controller-manager (/metrics)</li></ul></li></ul>
+	</div><div class="metric" data-stability="alpha">
+	<div class="metric_name">job_controller_stale_sync_skips_total</div>
+	<div class="metric_help">Total number of Job syncs skipped due to a stale watch cache.</div>
+	<ul>
+	<li><label class="metric_detail">Stability Level:</label><span class="metric_stability_level">ALPHA</span></li>
+	<li data-type="counter"><label class="metric_detail">Type:</label> <span class="metric_type">Counter</span></li>
+	<li class="metric_labels_varying"><label class="metric_detail">Labels:</label><span class="metric_label">group</span><span class="metric_label">resource</span></li><li class="metric_component_endpoints"><label class="metric_detail">Components:</label><ul><li>kube-controller-manager (/metrics)</li></ul></li></ul>
 	</div><div class="metric" data-stability="alpha">
 	<div class="metric_name">job_controller_terminated_pods_tracking_finalizer_total</div>
 	<div class="metric_help">`The number of terminated pods (phase=Failed|Succeeded), that have the finalizer batch.kubernetes.io/job-tracking, The event label can be "add" or "delete".`</div>
@@ -3265,6 +3300,13 @@ Alpha metrics do not have any API guarantees. These metrics must be used at your
 	<li><label class="metric_detail">Stability Level:</label><span class="metric_stability_level">ALPHA</span></li>
 	<li data-type="histogram"><label class="metric_detail">Type:</label> <span class="metric_type">Histogram</span></li>
 	<li class="metric_component_endpoints"><label class="metric_detail">Components:</label><ul><li>kube-controller-manager (/metrics)</li></ul></li></ul>
+	</div><div class="metric" data-stability="alpha">
+	<div class="metric_name">replicaset_controller_stale_sync_skips_total</div>
+	<div class="metric_help">Total number of ReplicaSet syncs skipped due to a stale watch cache.</div>
+	<ul>
+	<li><label class="metric_detail">Stability Level:</label><span class="metric_stability_level">ALPHA</span></li>
+	<li data-type="counter"><label class="metric_detail">Type:</label> <span class="metric_type">Counter</span></li>
+	<li class="metric_labels_varying"><label class="metric_detail">Labels:</label><span class="metric_label">group</span><span class="metric_label">resource</span></li><li class="metric_component_endpoints"><label class="metric_detail">Components:</label><ul><li>kube-controller-manager (/metrics)</li></ul></li></ul>
 	</div><div class="metric" data-stability="alpha">
 	<div class="metric_name">resourceclaim_controller_creates_total</div>
 	<div class="metric_help">Number of ResourceClaims creation requests, categorized by creation status and admin access</div>

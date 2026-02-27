@@ -54,6 +54,17 @@
   componentEndpoints:
   - component: kube-controller-manager
     endpoint: /metrics
+- name: stale_sync_skips_total
+  subsystem: daemonset_controller
+  help: Total number of DaemonSet syncs skipped due to a stale watch cache.
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  componentEndpoints:
+  - component: kube-controller-manager
+    endpoint: /metrics
 - name: sync_duration_seconds
   subsystem: root_ca_cert_publisher
   help: Number of namespace syncs happened in root ca cert publisher.
@@ -466,6 +477,17 @@
   componentEndpoints:
   - component: kube-controller-manager
     endpoint: /metrics
+- name: stale_sync_skips_total
+  subsystem: job_controller
+  help: Total number of Job syncs skipped due to a stale watch cache.
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  componentEndpoints:
+  - component: kube-controller-manager
+    endpoint: /metrics
 - name: terminated_pods_tracking_finalizer_total
   subsystem: job_controller
   help: |-
@@ -639,6 +661,17 @@
   - 2
   - 4
   - 8
+  componentEndpoints:
+  - component: kube-controller-manager
+    endpoint: /metrics
+- name: stale_sync_skips_total
+  subsystem: replicaset_controller
+  help: Total number of ReplicaSet syncs skipped due to a stale watch cache.
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
   componentEndpoints:
   - component: kube-controller-manager
     endpoint: /metrics
@@ -4208,6 +4241,30 @@
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
+- name: apiextensions_openapi_v2_regeneration_count
+  help: Counter of OpenAPI v2 spec regeneration count broken down by causing CRD name
+    and reason.
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - crd
+  - reason
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: apiextensions_openapi_v3_regeneration_count
+  help: Counter of OpenAPI v3 spec regeneration count broken down by group, version,
+    causing CRD and reason.
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - crd
+  - group
+  - reason
+  - version
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
 - name: conversion_webhook_duration_seconds
   namespace: apiserver
   help: Conversion webhook request latency
@@ -4272,30 +4329,6 @@
   - 4.096
   - 8.192
   - 16.384
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: apiextensions_openapi_v2_regeneration_count
-  help: Counter of OpenAPI v2 spec regeneration count broken down by causing CRD name
-    and reason.
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - crd
-  - reason
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: apiextensions_openapi_v3_regeneration_count
-  help: Counter of OpenAPI v3 spec regeneration count broken down by group, version,
-    causing CRD and reason.
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - crd
-  - group
-  - reason
-  - version
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
@@ -4423,73 +4456,6 @@
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
-- name: controller_admission_duration_seconds
-  subsystem: admission
-  namespace: apiserver
-  help: Admission controller latency histogram in seconds, identified by name and
-    broken out for each operation and API resource and type (validate or admit).
-  type: Histogram
-  stabilityLevel: STABLE
-  labels:
-  - name
-  - operation
-  - rejected
-  - type
-  buckets:
-  - 0.005
-  - 0.025
-  - 0.1
-  - 0.5
-  - 1
-  - 2.5
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: step_admission_duration_seconds
-  subsystem: admission
-  namespace: apiserver
-  help: Admission sub-step latency histogram in seconds, broken out for each operation
-    and API resource and step type (validate or admit).
-  type: Histogram
-  stabilityLevel: STABLE
-  labels:
-  - operation
-  - rejected
-  - type
-  buckets:
-  - 0.005
-  - 0.025
-  - 0.1
-  - 0.5
-  - 1
-  - 2.5
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: webhook_admission_duration_seconds
-  subsystem: admission
-  namespace: apiserver
-  help: Admission webhook latency histogram in seconds, identified by name and broken
-    out for each operation and API resource and type (validate or admit).
-  type: Histogram
-  stabilityLevel: STABLE
-  labels:
-  - name
-  - operation
-  - rejected
-  - type
-  buckets:
-  - 0.005
-  - 0.025
-  - 0.1
-  - 0.5
-  - 1
-  - 2.5
-  - 10
-  - 25
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
 - name: check_duration_seconds
   subsystem: mutating_admission_policy
   namespace: apiserver
@@ -4560,35 +4526,70 @@
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
-- name: aggregation_count_total
-  subsystem: aggregator_discovery
-  help: Counter of number of times discovery was aggregated
-  type: Counter
-  stabilityLevel: ALPHA
+- name: controller_admission_duration_seconds
+  subsystem: admission
+  namespace: apiserver
+  help: Admission controller latency histogram in seconds, identified by name and
+    broken out for each operation and API resource and type (validate or admit).
+  type: Histogram
+  stabilityLevel: STABLE
+  labels:
+  - name
+  - operation
+  - rejected
+  - type
+  buckets:
+  - 0.005
+  - 0.025
+  - 0.1
+  - 0.5
+  - 1
+  - 2.5
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
-- name: nopeer_requests_total
-  subsystem: aggregator_discovery
-  help: Counter of number of times no-peer (non peer-aggregated) discovery was requested
-  type: Counter
-  stabilityLevel: ALPHA
+- name: step_admission_duration_seconds
+  subsystem: admission
+  namespace: apiserver
+  help: Admission sub-step latency histogram in seconds, broken out for each operation
+    and API resource and step type (validate or admit).
+  type: Histogram
+  stabilityLevel: STABLE
+  labels:
+  - operation
+  - rejected
+  - type
+  buckets:
+  - 0.005
+  - 0.025
+  - 0.1
+  - 0.5
+  - 1
+  - 2.5
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
-- name: peer_aggregated_cache_hits_total
-  subsystem: aggregator_discovery
-  help: Counter of number of times discovery was served from peer-aggregated cache
-  type: Counter
-  stabilityLevel: ALPHA
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: peer_aggregated_cache_misses_total
-  subsystem: aggregator_discovery
-  help: Counter of number of times discovery was aggregated across all API servers
-  type: Counter
-  stabilityLevel: ALPHA
+- name: webhook_admission_duration_seconds
+  subsystem: admission
+  namespace: apiserver
+  help: Admission webhook latency histogram in seconds, identified by name and broken
+    out for each operation and API resource and type (validate or admit).
+  type: Histogram
+  stabilityLevel: STABLE
+  labels:
+  - name
+  - operation
+  - rejected
+  - type
+  buckets:
+  - 0.005
+  - 0.025
+  - 0.1
+  - 0.5
+  - 1
+  - 2.5
+  - 10
+  - 25
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
@@ -4715,17 +4716,6 @@
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
-- name: current_inqueue_requests
-  subsystem: apiserver
-  help: Maximal number of queued requests in this apiserver per request kind in last
-    second.
-  type: Gauge
-  stabilityLevel: ALPHA
-  labels:
-  - request_kind
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
 - name: apiserver_delegated_authn_request_duration_seconds
   help: Request latency in seconds. Broken down by status code.
   type: Histogram
@@ -4777,6 +4767,137 @@
   stabilityLevel: ALPHA
   labels:
   - code
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: active_fetch_count
+  subsystem: token_cache
+  namespace: authentication
+  type: Gauge
+  stabilityLevel: ALPHA
+  labels:
+  - status
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: fetch_total
+  subsystem: token_cache
+  namespace: authentication
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - status
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: request_duration_seconds
+  subsystem: token_cache
+  namespace: authentication
+  type: Histogram
+  stabilityLevel: ALPHA
+  labels:
+  - status
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: request_total
+  subsystem: token_cache
+  namespace: authentication
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - status
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: aggregation_count_total
+  subsystem: aggregator_discovery
+  help: Counter of number of times discovery was aggregated
+  type: Counter
+  stabilityLevel: ALPHA
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: nopeer_requests_total
+  subsystem: aggregator_discovery
+  help: Counter of number of times no-peer (non peer-aggregated) discovery was requested
+  type: Counter
+  stabilityLevel: ALPHA
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: peer_aggregated_cache_hits_total
+  subsystem: aggregator_discovery
+  help: Counter of number of times discovery was served from peer-aggregated cache
+  type: Counter
+  stabilityLevel: ALPHA
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: peer_aggregated_cache_misses_total
+  subsystem: aggregator_discovery
+  help: Counter of number of times discovery was aggregated across all API servers
+  type: Counter
+  stabilityLevel: ALPHA
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: current_inqueue_requests
+  subsystem: apiserver
+  help: Maximal number of queued requests in this apiserver per request kind in last
+    second.
+  type: Gauge
+  stabilityLevel: ALPHA
+  labels:
+  - request_kind
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: dial_duration_seconds
+  subsystem: egress_dialer
+  namespace: apiserver
+  help: Dial latency histogram in seconds, labeled by the protocol (http-connect or
+    grpc), transport (tcp or uds)
+  type: Histogram
+  stabilityLevel: ALPHA
+  labels:
+  - protocol
+  - transport
+  buckets:
+  - 0.005
+  - 0.025
+  - 0.1
+  - 0.5
+  - 2.5
+  - 12.5
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: dial_failure_count
+  subsystem: egress_dialer
+  namespace: apiserver
+  help: Dial failure count, labeled by the protocol (http-connect or grpc), transport
+    (tcp or uds), and stage (connect or proxy). The stage indicates at which stage
+    the dial failed
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - protocol
+  - stage
+  - transport
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: dial_start_total
+  subsystem: egress_dialer
+  namespace: apiserver
+  help: Dial starts, labeled by the protocol (http-connect or grpc) and transport
+    (tcp or uds).
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - protocol
+  - transport
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
@@ -5093,46 +5214,6 @@
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
-- name: active_fetch_count
-  subsystem: token_cache
-  namespace: authentication
-  type: Gauge
-  stabilityLevel: ALPHA
-  labels:
-  - status
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: fetch_total
-  subsystem: token_cache
-  namespace: authentication
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - status
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: request_duration_seconds
-  subsystem: token_cache
-  namespace: authentication
-  type: Histogram
-  stabilityLevel: ALPHA
-  labels:
-  - status
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: request_total
-  subsystem: token_cache
-  namespace: authentication
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - status
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
 - name: authorization_attempts_total
   help: Counter of authorization attempts broken down by result. It can be either
     'allowed', 'denied', 'no-opinion' or 'error'.
@@ -5435,54 +5516,6 @@
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
-- name: dial_duration_seconds
-  subsystem: egress_dialer
-  namespace: apiserver
-  help: Dial latency histogram in seconds, labeled by the protocol (http-connect or
-    grpc), transport (tcp or uds)
-  type: Histogram
-  stabilityLevel: ALPHA
-  labels:
-  - protocol
-  - transport
-  buckets:
-  - 0.005
-  - 0.025
-  - 0.1
-  - 0.5
-  - 2.5
-  - 12.5
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: dial_failure_count
-  subsystem: egress_dialer
-  namespace: apiserver
-  help: Dial failure count, labeled by the protocol (http-connect or grpc), transport
-    (tcp or uds), and stage (connect or proxy). The stage indicates at which stage
-    the dial failed
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - protocol
-  - stage
-  - transport
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: dial_start_total
-  subsystem: egress_dialer
-  namespace: apiserver
-  help: Dial starts, labeled by the protocol (http-connect or grpc) and transport
-    (tcp or uds).
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - protocol
-  - transport
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
 - name: automatic_reload_last_timestamp_seconds
   subsystem: encryption_config_controller
   namespace: apiserver
@@ -5650,613 +5683,6 @@
   - 13.1072
   - 26.2144
   - 52.4288
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: init_events_total
-  namespace: apiserver
-  help: Counter of init events processed in watch cache broken by resource type.
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: apiserver_resource_objects
-  help: Number of stored objects at the time of last check split by kind. In case
-    of a fetching error, the value will be -1.
-  type: Gauge
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: apiserver_resource_size_estimate_bytes
-  help: Estimated size of stored objects in database. Estimate is based on sum of
-    last observed sizes of serialized objects. In case of a fetching error, the value
-    will be -1.
-  type: Gauge
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: storage_consistency_checks_total
-  namespace: apiserver
-  help: Counter for status of consistency checks between etcd and watch cache
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  - status
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: data_key_generation_duration_seconds
-  subsystem: storage
-  namespace: apiserver
-  help: Latencies in seconds of data encryption key(DEK) generation operations.
-  type: Histogram
-  stabilityLevel: ALPHA
-  buckets:
-  - 5e-06
-  - 1e-05
-  - 2e-05
-  - 4e-05
-  - 8e-05
-  - 0.00016
-  - 0.00032
-  - 0.00064
-  - 0.00128
-  - 0.00256
-  - 0.00512
-  - 0.01024
-  - 0.02048
-  - 0.04096
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: data_key_generation_failures_total
-  subsystem: storage
-  namespace: apiserver
-  help: Total number of failed data encryption key(DEK) generation operations.
-  type: Counter
-  stabilityLevel: ALPHA
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: storage_db_total_size_in_bytes
-  subsystem: apiserver
-  help: Total size of the storage database file physically allocated in bytes.
-  type: Gauge
-  deprecatedVersion: 1.28.0
-  stabilityLevel: ALPHA
-  labels:
-  - endpoint
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: storage_decode_errors_total
-  namespace: apiserver
-  help: Number of stored object decode errors split by object type
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: envelope_transformation_cache_misses_total
-  subsystem: storage
-  namespace: apiserver
-  help: Total number of cache misses while accessing key decryption key(KEK).
-  type: Counter
-  stabilityLevel: ALPHA
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: storage_events_received_total
-  subsystem: apiserver
-  help: Number of etcd events received split by kind.
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: apiserver_storage_list_evaluated_objects_total
-  help: Number of objects tested in the course of serving a LIST request from storage
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: apiserver_storage_list_fetched_objects_total
-  help: Number of objects read from storage in the course of serving a LIST request
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: apiserver_storage_list_returned_objects_total
-  help: Number of objects returned for a LIST request from storage
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: apiserver_storage_list_total
-  help: Number of LIST requests served from storage
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: transformation_duration_seconds
-  subsystem: storage
-  namespace: apiserver
-  help: Latencies in seconds of value transformation operations.
-  type: Histogram
-  stabilityLevel: ALPHA
-  labels:
-  - transformation_type
-  - transformer_prefix
-  buckets:
-  - 5e-06
-  - 1e-05
-  - 2e-05
-  - 4e-05
-  - 8e-05
-  - 0.00016
-  - 0.00032
-  - 0.00064
-  - 0.00128
-  - 0.00256
-  - 0.00512
-  - 0.01024
-  - 0.02048
-  - 0.04096
-  - 0.08192
-  - 0.16384
-  - 0.32768
-  - 0.65536
-  - 1.31072
-  - 2.62144
-  - 5.24288
-  - 10.48576
-  - 20.97152
-  - 41.94304
-  - 83.88608
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: transformation_operations_total
-  subsystem: storage
-  namespace: apiserver
-  help: Total number of transformations. Successful transformation will have a status
-    'OK' and a varied status string when the transformation fails. The status, resource,
-    and transformation_type fields can be used for alerting purposes. For example,
-    you can monitor for encryption/decryption failures using the transformation_type
-    (e.g., from_storage for decryption and to_storage for encryption). Additionally,
-    these fields can be used to ensure that the correct transformers are applied to
-    each resource.
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - resource
-  - status
-  - transformation_type
-  - transformer_prefix
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: terminated_watchers_total
-  namespace: apiserver
-  help: Counter of watchers closed due to unresponsiveness broken by resource type.
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: consistent_read_total
-  subsystem: watch_cache
-  namespace: apiserver
-  help: Counter for consistent reads from cache.
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - fallback
-  - group
-  - resource
-  - success
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: events_dispatched_total
-  subsystem: watch_cache
-  namespace: apiserver
-  help: Counter of events dispatched in watch cache broken by resource type.
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: events_received_total
-  subsystem: watch_cache
-  namespace: apiserver
-  help: Counter of events received in watch cache broken by resource type.
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: initializations_total
-  subsystem: watch_cache
-  namespace: apiserver
-  help: Counter of watch cache initializations broken by resource type.
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: read_wait_seconds
-  subsystem: watch_cache
-  namespace: apiserver
-  help: Histogram of time spent waiting for a watch cache to become fresh.
-  type: Histogram
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  buckets:
-  - 0.005
-  - 0.025
-  - 0.05
-  - 0.1
-  - 0.2
-  - 0.4
-  - 0.6
-  - 0.8
-  - 1
-  - 1.25
-  - 1.5
-  - 2
-  - 3
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: resource_version
-  subsystem: watch_cache
-  namespace: apiserver
-  help: Current resource version of watch cache broken by resource type.
-  type: Gauge
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: etcd_bookmark_counts
-  help: Number of etcd bookmarks (progress notify events) split by kind.
-  type: Gauge
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: etcd_lease_object_counts
-  help: Number of objects attached to a single etcd lease.
-  type: Histogram
-  stabilityLevel: ALPHA
-  buckets:
-  - 10
-  - 50
-  - 100
-  - 500
-  - 1000
-  - 2500
-  - 5000
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: etcd_request_duration_seconds
-  help: Etcd request latency in seconds for each operation and object type.
-  type: Histogram
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - operation
-  - resource
-  buckets:
-  - 0.005
-  - 0.025
-  - 0.05
-  - 0.1
-  - 0.2
-  - 0.4
-  - 0.6
-  - 0.8
-  - 1
-  - 1.25
-  - 1.5
-  - 2
-  - 3
-  - 4
-  - 5
-  - 6
-  - 8
-  - 10
-  - 15
-  - 20
-  - 30
-  - 45
-  - 60
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: etcd_request_errors_total
-  help: Etcd failed request counts for each operation and object type.
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - operation
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: etcd_requests_total
-  help: Etcd request counts for each operation and object type.
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - operation
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: capacity
-  subsystem: watch_cache
-  help: Total capacity of watch cache broken by resource type.
-  type: Gauge
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: capacity_decrease_total
-  subsystem: watch_cache
-  help: Total number of watch cache capacity decrease events broken by resource type.
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: capacity_increase_total
-  subsystem: watch_cache
-  help: Total number of watch cache capacity increase events broken by resource type.
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: automatic_reload_last_timestamp_seconds
-  subsystem: authentication_config_controller
-  namespace: apiserver
-  help: Timestamp of the last automatic reload of authentication configuration split
-    by status and apiserver identity.
-  type: Gauge
-  stabilityLevel: BETA
-  labels:
-  - apiserver_id_hash
-  - status
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: automatic_reloads_total
-  subsystem: authentication_config_controller
-  namespace: apiserver
-  help: Total number of automatic reloads of authentication configuration split by
-    status and apiserver identity.
-  type: Counter
-  stabilityLevel: BETA
-  labels:
-  - apiserver_id_hash
-  - status
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: automatic_reload_last_timestamp_seconds
-  subsystem: authorization_config_controller
-  namespace: apiserver
-  help: Timestamp of the last automatic reload of authorization configuration split
-    by status and apiserver identity.
-  type: Gauge
-  stabilityLevel: BETA
-  labels:
-  - apiserver_id_hash
-  - status
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: automatic_reloads_total
-  subsystem: authorization_config_controller
-  namespace: apiserver
-  help: Total number of automatic reloads of authorization configuration split by
-    status and apiserver identity.
-  type: Counter
-  stabilityLevel: BETA
-  labels:
-  - apiserver_id_hash
-  - status
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: apiserver_storage_objects
-  help: '[DEPRECATED, consider using apiserver_resource_objects instead] Number of
-    stored objects at the time of last check split by kind. In case of a fetching
-    error, the value will be -1.'
-  type: Gauge
-  deprecatedVersion: 1.34.0
-  stabilityLevel: STABLE
-  labels:
-  - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: apiserver_storage_size_bytes
-  help: Size of the storage database file physically allocated in bytes.
-  type: Custom
-  stabilityLevel: STABLE
-  labels:
-  - storage_cluster_id
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: apiserver_authentication_jwt_authenticator_jwks_fetch_last_key_set_info
-  help: Information about the last JWKS fetched by the JWT authenticator with hash
-    as label, split by api server identity and jwt issuer.
-  type: Custom
-  stabilityLevel: ALPHA
-  labels:
-  - jwt_issuer_hash
-  - apiserver_id_hash
-  - hash
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: jwt_authenticator_jwks_fetch_last_timestamp_seconds
-  subsystem: authentication
-  namespace: apiserver
-  help: Timestamp of the last successful or failed JWKS fetch split by result, api
-    server identity and jwt issuer for the JWT authenticator.
-  type: Gauge
-  stabilityLevel: ALPHA
-  labels:
-  - apiserver_id_hash
-  - jwt_issuer_hash
-  - result
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: jwt_authenticator_latency_seconds
-  subsystem: authentication
-  namespace: apiserver
-  help: Latency of jwt authentication operations in seconds. This is the time spent
-    authenticating a token for cache miss only (i.e. when the token is not found in
-    the cache).
-  type: Histogram
-  stabilityLevel: ALPHA
-  labels:
-  - jwt_issuer_hash
-  - result
-  buckets:
-  - 0.001
-  - 0.005
-  - 0.01
-  - 0.025
-  - 0.05
-  - 0.1
-  - 0.25
-  - 0.5
-  - 1
-  - 2.5
-  - 5
-  - 10
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: webhook_duration_seconds
-  subsystem: authorization
-  namespace: apiserver
-  help: Request latency in seconds.
-  type: Histogram
-  stabilityLevel: ALPHA
-  labels:
-  - name
-  - result
-  buckets:
-  - 0.005
-  - 0.01
-  - 0.025
-  - 0.05
-  - 0.1
-  - 0.25
-  - 0.5
-  - 1
-  - 2.5
-  - 5
-  - 10
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: webhook_evaluations_fail_open_total
-  subsystem: authorization
-  namespace: apiserver
-  help: NoOpinion results due to webhook timeout or error.
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - name
-  - result
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: webhook_evaluations_total
-  subsystem: authorization
-  namespace: apiserver
-  help: Round-trips to authorization webhooks.
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - name
-  - result
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
@@ -6681,6 +6107,42 @@
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
+- name: init_events_total
+  namespace: apiserver
+  help: Counter of init events processed in watch cache broken by resource type.
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: peer_discovery_sync_errors_total
+  subsystem: apiserver
+  help: Total number of errors encountered while syncing discovery information from
+    a peer kube-apiserver
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - type
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: peer_proxy_errors_total
+  subsystem: apiserver
+  help: Total number of errors encountered while proxying requests to a peer kube
+    apiserver
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  - type
+  - version
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
 - name: rerouted_request_total
   subsystem: apiserver
   help: '`Total number of requests that were proxied to a peer kube-apiserver because
@@ -6694,6 +6156,214 @@
   - group
   - resource
   - version
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: apiserver_resource_objects
+  help: Number of stored objects at the time of last check split by kind. In case
+    of a fetching error, the value will be -1.
+  type: Gauge
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: apiserver_resource_size_estimate_bytes
+  help: Estimated size of stored objects in database. Estimate is based on sum of
+    last observed sizes of serialized objects. In case of a fetching error, the value
+    will be -1.
+  type: Gauge
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: storage_consistency_checks_total
+  namespace: apiserver
+  help: Counter for status of consistency checks between etcd and watch cache
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  - status
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: data_key_generation_duration_seconds
+  subsystem: storage
+  namespace: apiserver
+  help: Latencies in seconds of data encryption key(DEK) generation operations.
+  type: Histogram
+  stabilityLevel: ALPHA
+  buckets:
+  - 5e-06
+  - 1e-05
+  - 2e-05
+  - 4e-05
+  - 8e-05
+  - 0.00016
+  - 0.00032
+  - 0.00064
+  - 0.00128
+  - 0.00256
+  - 0.00512
+  - 0.01024
+  - 0.02048
+  - 0.04096
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: data_key_generation_failures_total
+  subsystem: storage
+  namespace: apiserver
+  help: Total number of failed data encryption key(DEK) generation operations.
+  type: Counter
+  stabilityLevel: ALPHA
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: storage_db_total_size_in_bytes
+  subsystem: apiserver
+  help: Total size of the storage database file physically allocated in bytes.
+  type: Gauge
+  deprecatedVersion: 1.28.0
+  stabilityLevel: ALPHA
+  labels:
+  - endpoint
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: storage_decode_errors_total
+  namespace: apiserver
+  help: Number of stored object decode errors split by object type
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: envelope_transformation_cache_misses_total
+  subsystem: storage
+  namespace: apiserver
+  help: Total number of cache misses while accessing key decryption key(KEK).
+  type: Counter
+  stabilityLevel: ALPHA
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: storage_events_received_total
+  subsystem: apiserver
+  help: Number of etcd events received split by kind.
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: apiserver_storage_list_evaluated_objects_total
+  help: Number of objects tested in the course of serving a LIST request from storage
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: apiserver_storage_list_fetched_objects_total
+  help: Number of objects read from storage in the course of serving a LIST request
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: apiserver_storage_list_returned_objects_total
+  help: Number of objects returned for a LIST request from storage
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: apiserver_storage_list_total
+  help: Number of LIST requests served from storage
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: transformation_duration_seconds
+  subsystem: storage
+  namespace: apiserver
+  help: Latencies in seconds of value transformation operations.
+  type: Histogram
+  stabilityLevel: ALPHA
+  labels:
+  - transformation_type
+  - transformer_prefix
+  buckets:
+  - 5e-06
+  - 1e-05
+  - 2e-05
+  - 4e-05
+  - 8e-05
+  - 0.00016
+  - 0.00032
+  - 0.00064
+  - 0.00128
+  - 0.00256
+  - 0.00512
+  - 0.01024
+  - 0.02048
+  - 0.04096
+  - 0.08192
+  - 0.16384
+  - 0.32768
+  - 0.65536
+  - 1.31072
+  - 2.62144
+  - 5.24288
+  - 10.48576
+  - 20.97152
+  - 41.94304
+  - 83.88608
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: transformation_operations_total
+  subsystem: storage
+  namespace: apiserver
+  help: Total number of transformations. Successful transformation will have a status
+    'OK' and a varied status string when the transformation fails. The status, resource,
+    and transformation_type fields can be used for alerting purposes. For example,
+    you can monitor for encryption/decryption failures using the transformation_type
+    (e.g., from_storage for decryption and to_storage for encryption). Additionally,
+    these fields can be used to ensure that the correct transformers are applied to
+    each resource.
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - resource
+  - status
+  - transformation_type
+  - transformer_prefix
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
@@ -6719,26 +6389,102 @@
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
-- name: declarative_validation_panics_total
-  subsystem: validation
+- name: terminated_watchers_total
   namespace: apiserver
-  help: Number of panics in declarative validation, broken down by validation identifier.
+  help: Counter of watchers closed due to unresponsiveness broken by resource type.
   type: Counter
   stabilityLevel: ALPHA
   labels:
-  - validation_identifier
+  - group
+  - resource
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
-- name: declarative_validation_parity_discrepancies_total
-  subsystem: validation
+- name: consistent_read_total
+  subsystem: watch_cache
   namespace: apiserver
-  help: Number of discrepancies between declarative and handwritten validation, broken
-    down by validation identifier.
+  help: Counter for consistent reads from cache.
   type: Counter
   stabilityLevel: ALPHA
   labels:
-  - validation_identifier
+  - fallback
+  - group
+  - resource
+  - success
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: events_dispatched_total
+  subsystem: watch_cache
+  namespace: apiserver
+  help: Counter of events dispatched in watch cache broken by resource type.
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: events_received_total
+  subsystem: watch_cache
+  namespace: apiserver
+  help: Counter of events received in watch cache broken by resource type.
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: initializations_total
+  subsystem: watch_cache
+  namespace: apiserver
+  help: Counter of watch cache initializations broken by resource type.
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: read_wait_seconds
+  subsystem: watch_cache
+  namespace: apiserver
+  help: Histogram of time spent waiting for a watch cache to become fresh.
+  type: Histogram
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  buckets:
+  - 0.005
+  - 0.025
+  - 0.05
+  - 0.1
+  - 0.2
+  - 0.4
+  - 0.6
+  - 0.8
+  - 1
+  - 1.25
+  - 1.5
+  - 2
+  - 3
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: resource_version
+  subsystem: watch_cache
+  namespace: apiserver
+  help: Current resource version of watch cache broken by resource type.
+  type: Gauge
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
@@ -6761,6 +6507,173 @@
     SAN extension missing (either/or, based on the runtime environment)
   type: Counter
   stabilityLevel: ALPHA
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: etcd_bookmark_counts
+  help: Number of etcd bookmarks (progress notify events) split by kind.
+  type: Gauge
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: etcd_lease_object_counts
+  help: Number of objects attached to a single etcd lease.
+  type: Histogram
+  stabilityLevel: ALPHA
+  buckets:
+  - 10
+  - 50
+  - 100
+  - 500
+  - 1000
+  - 2500
+  - 5000
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: etcd_request_duration_seconds
+  help: Etcd request latency in seconds for each operation and object type.
+  type: Histogram
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - operation
+  - resource
+  buckets:
+  - 0.005
+  - 0.025
+  - 0.05
+  - 0.1
+  - 0.2
+  - 0.4
+  - 0.6
+  - 0.8
+  - 1
+  - 1.25
+  - 1.5
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 8
+  - 10
+  - 15
+  - 20
+  - 30
+  - 45
+  - 60
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: etcd_request_errors_total
+  help: Etcd failed request counts for each operation and object type.
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - operation
+  - resource
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: etcd_requests_total
+  help: Etcd request counts for each operation and object type.
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - operation
+  - resource
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: capacity
+  subsystem: watch_cache
+  help: Total capacity of watch cache broken by resource type.
+  type: Gauge
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: capacity_decrease_total
+  subsystem: watch_cache
+  help: Total number of watch cache capacity decrease events broken by resource type.
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: capacity_increase_total
+  subsystem: watch_cache
+  help: Total number of watch cache capacity increase events broken by resource type.
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - resource
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: automatic_reload_last_timestamp_seconds
+  subsystem: authentication_config_controller
+  namespace: apiserver
+  help: Timestamp of the last automatic reload of authentication configuration split
+    by status and apiserver identity.
+  type: Gauge
+  stabilityLevel: BETA
+  labels:
+  - apiserver_id_hash
+  - status
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: automatic_reloads_total
+  subsystem: authentication_config_controller
+  namespace: apiserver
+  help: Total number of automatic reloads of authentication configuration split by
+    status and apiserver identity.
+  type: Counter
+  stabilityLevel: BETA
+  labels:
+  - apiserver_id_hash
+  - status
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: automatic_reload_last_timestamp_seconds
+  subsystem: authorization_config_controller
+  namespace: apiserver
+  help: Timestamp of the last automatic reload of authorization configuration split
+    by status and apiserver identity.
+  type: Gauge
+  stabilityLevel: BETA
+  labels:
+  - apiserver_id_hash
+  - status
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: automatic_reloads_total
+  subsystem: authorization_config_controller
+  namespace: apiserver
+  help: Total number of automatic reloads of authorization configuration split by
+    status and apiserver identity.
+  type: Counter
+  stabilityLevel: BETA
+  labels:
+  - apiserver_id_hash
+  - status
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
@@ -6864,6 +6777,151 @@
   - 10
   - 15
   - 30
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: apiserver_storage_objects
+  help: '[DEPRECATED, consider using apiserver_resource_objects instead] Number of
+    stored objects at the time of last check split by kind. In case of a fetching
+    error, the value will be -1.'
+  type: Gauge
+  deprecatedVersion: 1.34.0
+  stabilityLevel: STABLE
+  labels:
+  - resource
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: apiserver_storage_size_bytes
+  help: Size of the storage database file physically allocated in bytes.
+  type: Custom
+  stabilityLevel: STABLE
+  labels:
+  - storage_cluster_id
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: apiserver_authentication_jwt_authenticator_jwks_fetch_last_key_set_info
+  help: Information about the last JWKS fetched by the JWT authenticator with hash
+    as label, split by api server identity and jwt issuer.
+  type: Custom
+  stabilityLevel: ALPHA
+  labels:
+  - jwt_issuer_hash
+  - apiserver_id_hash
+  - hash
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: jwt_authenticator_jwks_fetch_last_timestamp_seconds
+  subsystem: authentication
+  namespace: apiserver
+  help: Timestamp of the last successful or failed JWKS fetch split by result, api
+    server identity and jwt issuer for the JWT authenticator.
+  type: Gauge
+  stabilityLevel: ALPHA
+  labels:
+  - apiserver_id_hash
+  - jwt_issuer_hash
+  - result
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: jwt_authenticator_latency_seconds
+  subsystem: authentication
+  namespace: apiserver
+  help: Latency of jwt authentication operations in seconds. This is the time spent
+    authenticating a token for cache miss only (i.e. when the token is not found in
+    the cache).
+  type: Histogram
+  stabilityLevel: ALPHA
+  labels:
+  - jwt_issuer_hash
+  - result
+  buckets:
+  - 0.001
+  - 0.005
+  - 0.01
+  - 0.025
+  - 0.05
+  - 0.1
+  - 0.25
+  - 0.5
+  - 1
+  - 2.5
+  - 5
+  - 10
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: webhook_duration_seconds
+  subsystem: authorization
+  namespace: apiserver
+  help: Request latency in seconds.
+  type: Histogram
+  stabilityLevel: ALPHA
+  labels:
+  - name
+  - result
+  buckets:
+  - 0.005
+  - 0.01
+  - 0.025
+  - 0.05
+  - 0.1
+  - 0.25
+  - 0.5
+  - 1
+  - 2.5
+  - 5
+  - 10
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: webhook_evaluations_fail_open_total
+  subsystem: authorization
+  namespace: apiserver
+  help: NoOpinion results due to webhook timeout or error.
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - name
+  - result
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: webhook_evaluations_total
+  subsystem: authorization
+  namespace: apiserver
+  help: Round-trips to authorization webhooks.
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - name
+  - result
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: declarative_validation_panics_total
+  subsystem: validation
+  namespace: apiserver
+  help: Number of panics in declarative validation, broken down by validation identifier.
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - validation_identifier
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: declarative_validation_parity_discrepancies_total
+  subsystem: validation
+  namespace: apiserver
+  help: Number of discrepancies between declarative and handwritten validation, broken
+    down by validation identifier.
+  type: Counter
+  stabilityLevel: ALPHA
+  labels:
+  - validation_identifier
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
@@ -7024,6 +7082,42 @@
   - 16384
   componentEndpoints:
   - component: cloud-controller-manager
+    endpoint: /metrics
+- name: processing_latency_seconds
+  subsystem: informer
+  help: Time taken to process events after popping from the queue.
+  type: Histogram
+  stabilityLevel: ALPHA
+  labels:
+  - group
+  - name
+  - resource
+  - version
+  buckets:
+  - 0.001
+  - 0.005
+  - 0.01
+  - 0.025
+  - 0.05
+  - 0.1
+  - 0.25
+  - 0.5
+  - 1
+  - 2.5
+  - 5
+  - 10
+  componentEndpoints:
+  - component: cloud-controller-manager
+    endpoint: /metrics
+  - component: kube-apiserver
+    endpoint: /metrics
+  - component: kube-controller-manager
+    endpoint: /metrics
+  - component: kube-proxy
+    endpoint: /metrics
+  - component: kube-scheduler
+    endpoint: /metrics
+  - component: kubelet
     endpoint: /metrics
 - name: queued_items
   subsystem: informer
@@ -7780,6 +7874,28 @@
     endpoint: /metrics/slis
   - component: kubelet
     endpoint: /metrics/slis
+- name: x509_insecure_sha1_total
+  subsystem: kube_aggregator
+  namespace: apiserver
+  help: Counts the number of requests to servers with insecure SHA1 signatures in
+    their serving certificate OR the number of connection failures due to the insecure
+    SHA1 signatures (either/or, based on the runtime environment)
+  type: Counter
+  stabilityLevel: ALPHA
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: x509_missing_san_total
+  subsystem: kube_aggregator
+  namespace: apiserver
+  help: Counts the number of requests to servers missing SAN extension in their serving
+    certificate OR the number of connection failures due to the lack of x509 certificate
+    SAN extension missing (either/or, based on the runtime environment)
+  type: Counter
+  stabilityLevel: ALPHA
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
 - name: changes
   subsystem: endpoint_slice_controller
   help: Number of EndpointSlice changes
@@ -7931,28 +8047,6 @@
   labels:
   - name
   - reason
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: x509_insecure_sha1_total
-  subsystem: kube_aggregator
-  namespace: apiserver
-  help: Counts the number of requests to servers with insecure SHA1 signatures in
-    their serving certificate OR the number of connection failures due to the insecure
-    SHA1 signatures (either/or, based on the runtime environment)
-  type: Counter
-  stabilityLevel: ALPHA
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: x509_missing_san_total
-  subsystem: kube_aggregator
-  namespace: apiserver
-  help: Counts the number of requests to servers missing SAN extension in their serving
-    certificate OR the number of connection failures due to the lack of x509 certificate
-    SAN extension missing (either/or, based on the runtime environment)
-  type: Counter
-  stabilityLevel: ALPHA
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
