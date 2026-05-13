@@ -24,6 +24,7 @@ import (
 	"time"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/scheduling/v1alpha2"
 	"k8s.io/apimachinery/pkg/util/sets"
 	fwk "k8s.io/kube-scheduler/framework"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config"
@@ -160,6 +161,20 @@ type SortedScoredNodes interface {
 	Len() int
 }
 
+// PodGroupSchedulingFunc is a function that will be run to check feasibility of a pod group
+// scheduling during workload-aware preemption algorithm.
+type PodGroupSchedulingFunc func(ctx context.Context) (*fwk.PodGroupAssignments, *fwk.Status)
+
+// PodGroupPostFilterPlugin is an interface for plugins that are called
+// after a PodGroup cannot be scheduled.
+// It should not be used by any other plugin but DefaultPreemption.
+type PodGroupPostFilterPlugin interface {
+	fwk.Plugin
+
+	// PodGroupPostFilter is called after a PodGroup cannot be scheduled.
+	PodGroupPostFilter(ctx context.Context, pg *v1alpha2.PodGroup, pods []*v1.Pod, pgSchedulingFunc PodGroupSchedulingFunc) *fwk.Status
+}
+
 // Framework manages the set of plugins in use by the scheduling framework.
 // Configured plugins are called at specified points in a scheduling context.
 type Framework interface {
@@ -174,12 +189,12 @@ type Framework interface {
 	// QueueSortFunc returns the function to sort pods in scheduling queue
 	QueueSortFunc() fwk.LessFunc
 
-	// Create a scheduling signature for a given pod, if possible. Two pods with the same signature
+	// SignPod creates a scheduling signature for a given pod, if possible. Two pods with the same signature
 	// should get the same feasibility and scores for any given set of nodes even after one of them gets assigned. If some plugins
 	// are unable to create a signature, the pod may be "unsignable" which disables results caching
 	// and gang scheduling optimizations.
 	// See https://github.com/kubernetes/enhancements/tree/master/keps/sig-scheduling/5598-opportunistic-batching
-	SignPod(ctx context.Context, pod *v1.Pod, recordPluginStats bool) fwk.PodSignature
+	SignPod(ctx context.Context, pod *v1.Pod) fwk.PodSignature
 
 	// RunPreFilterPlugins runs the set of configured PreFilter plugins. It returns
 	// *fwk.Status and its code is set to non-success if any of the plugins returns
@@ -198,14 +213,18 @@ type Framework interface {
 	// cluster state to make the pod potentially schedulable in a future scheduling cycle.
 	RunPostFilterPlugins(ctx context.Context, state fwk.CycleState, pod *v1.Pod, filteredNodeStatusMap fwk.NodeToStatusReader) (*fwk.PostFilterResult, *fwk.Status)
 
-	// Get a "node hint" for a given pod. A node hint is the name of a node provided by the batching code when information
+	// GetNodeHint returns a "node hint" for a given pod. A node hint is the name of a node provided by the batching code when information
 	// from the previous scheduling cycle can be reused for this cycle.
 	// If the batching code cannot provide a hint, the function returns "".
 	// See git.k8s.io/enhancements/keps/sig-scheduling/5598-opportunistic-batching
-	GetNodeHint(ctx context.Context, pod *v1.Pod, state fwk.CycleState, cycleCount int64) (hint string, signature fwk.PodSignature)
+	GetNodeHint(ctx context.Context, pod *v1.Pod, signature fwk.PodSignature, state fwk.CycleState, cycleCount int64) string
 
 	// StoreScheduleResults stores the results after we have sorted and filtered nodes.
 	StoreScheduleResults(ctx context.Context, signature fwk.PodSignature, hintedNode, chosenNode string, otherNodes SortedScoredNodes, cycleCount int64)
+
+	// RunPlacementGeneratePlugins runs the set of configured PlacementGenerate plugins.
+	// It returns the combined list of generated Placements.
+	RunPlacementGeneratePlugins(ctx context.Context, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, nodes []fwk.NodeInfo) ([]*fwk.Placement, *fwk.Status)
 
 	// RunPreBindPlugins runs the set of configured PreBind plugins. It returns
 	// *fwk.Status and its code is set to non-success if any of the plugins returns
@@ -257,6 +276,12 @@ type Framework interface {
 	// code=5("skip") status.
 	RunBindPlugins(ctx context.Context, state fwk.CycleState, pod *v1.Pod, nodeName string) *fwk.Status
 
+	// RunPlacementScorePlugins runs the set of configured placement scoring plugins.
+	// It returns a list that stores scores from each plugin and total score for each Placement.
+	// It also returns *Status, which is set to non-success if any of the plugins returns
+	// a non-success status.
+	RunPlacementScorePlugins(ctx context.Context, state fwk.PodGroupCycleState, podGroupInfo fwk.PodGroupInfo, placements []*fwk.PodGroupAssignments) (ns []fwk.PlacementPluginScores, status *fwk.Status)
+
 	// HasFilterPlugins returns true if at least one Filter plugin is defined.
 	HasFilterPlugins() bool
 
@@ -265,6 +290,9 @@ type Framework interface {
 
 	// HasScorePlugins returns true if at least one Score plugin is defined.
 	HasScorePlugins() bool
+
+	// PodGroupPostFilterPlugins returns registered PodGroupPostFilter plugins.
+	PodGroupPostFilterPlugins() []PodGroupPostFilterPlugin
 
 	// ListPlugins returns a map of extension point name to list of configured Plugins.
 	ListPlugins() *config.Plugins
@@ -283,20 +311,11 @@ type Framework interface {
 	Close() error
 }
 
-// NewPostFilterResult creates PostFilterResult with a provided nominated node
-// and a list of victims (if any) that need to be preempted to make the pod schedulable.
-func NewPostFilterResult(nodeName string, victims []*v1.Pod) *fwk.PostFilterResult {
+func NewPostFilterResultWithNominatedNode(name string) *fwk.PostFilterResult {
 	return &fwk.PostFilterResult{
 		NominatingInfo: &fwk.NominatingInfo{
-			NominatedNodeName: nodeName,
+			NominatedNodeName: name,
 			NominatingMode:    fwk.ModeOverride,
 		},
-		Victims: victims,
 	}
-}
-
-// Deprecated: use NewPostFilterResult instead, even if no victims were identified.
-// Deprecated in Kubernetes 1.36 and will be removed in 1.38.
-func NewPostFilterResultWithNominatedNode(nodeName string) *fwk.PostFilterResult {
-	return NewPostFilterResult(nodeName, nil)
 }

@@ -20,11 +20,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/version"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	ndf "k8s.io/component-helpers/nodedeclaredfeatures"
+	ndffeatures "k8s.io/component-helpers/nodedeclaredfeatures/features"
 	ndftesting "k8s.io/component-helpers/nodedeclaredfeatures/testing"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
@@ -87,8 +87,7 @@ func TestDeclaredFeatureDiscovery(t *testing.T) {
 			kubelet := testKubelet.kubelet
 			fakeCM := cm.NewFakeContainerManagerWithNodeConfig(cm.NodeConfig{})
 			kubelet.containerManager = fakeCM
-			framework, err := ndf.New(registeredFeatures)
-			require.NoError(t, err)
+			framework := ndf.New(registeredFeatures)
 			kubelet.nodeDeclaredFeaturesFramework = framework
 			kubelet.version = tc.kubeletVersion
 
@@ -97,6 +96,46 @@ func TestDeclaredFeatureDiscovery(t *testing.T) {
 				assert.Contains(t, features, string(podLevelResourcesIPPRFeatureGate))
 			} else {
 				assert.NotContains(t, features, string(podLevelResourcesIPPRFeatureGate))
+			}
+		})
+	}
+}
+
+func TestExtendWebSocketsToKubeletFeatureDiscovery(t *testing.T) {
+	featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.NodeDeclaredFeatures, true)
+
+	testcases := []struct {
+		name                          string
+		extendWebSocketsToKubeletGate bool
+		expectFeature                 bool
+	}{
+		{
+			name:                          "ExtendWebSocketsToKubelet feature enabled",
+			extendWebSocketsToKubeletGate: true,
+			expectFeature:                 true,
+		},
+		{
+			name:                          "ExtendWebSocketsToKubelet feature disabled",
+			extendWebSocketsToKubeletGate: false,
+			expectFeature:                 false,
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.ExtendWebSocketsToKubelet, tc.extendWebSocketsToKubeletGate)
+
+			testKubelet := newTestKubelet(t, false /* controllerAttachDetachEnabled */)
+			defer testKubelet.Cleanup()
+			kubelet := testKubelet.kubelet
+
+			framework := ndf.New(ndffeatures.AllFeatures)
+			kubelet.nodeDeclaredFeaturesFramework = framework
+
+			features := kubelet.discoverNodeDeclaredFeatures()
+			if tc.expectFeature {
+				assert.Contains(t, features, "ExtendWebSocketsToKubelet")
+			} else {
+				assert.NotContains(t, features, "ExtendWebSocketsToKubelet")
 			}
 		})
 	}

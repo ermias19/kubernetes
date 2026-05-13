@@ -136,7 +136,7 @@ linters:
       - linters:
         - kubeapilinter
         path-except: staging/src/k8s.io/api/.*
-        
+
       # Exceptions for kube-api-linter.
       # Exceptions are used for kube-api-linter to ignore existing issues that cannot be fixed without breaking changes.
       
@@ -176,22 +176,19 @@ linters:
         path: "staging/src/k8s.io/api/events/(v1|v1beta1)/types.go"
       - text: 'notimestamp: naming convention "notimestamp": field AllocationResult.AllocationTimestamp: prefer use of the term ''time'' over ''timestamp'''
         path: "staging/src/k8s.io/api/resource/(v1|v1beta1|v1beta2)/types.go"
+      
+      
       # optionalfields - Ignore optionalfields issues for existing API group
       # TODO: For each existing API group, we aim to remove it over time.
       - text: "optionalfields: field .* should (?:be a pointer|have the omitempty tag)\\."
         path: "staging/src/k8s.io/api/(admission|admissionregistration|apps|authentication|authorization|autoscaling|batch|certificates|coordination|core|discovery|events|extensions|flowcontrol|imagepolicy|networking|node|policy|rbac|resource|scheduling|storage|storagemigration)"
-      - text: "optionalfields: field StorageVersionCondition.ObservedGeneration should be a pointer."
+      
+      # optionalfields - Ignore existing issues for apiserverinternal API group
+      - text: "optionalfields: field StorageVersionCondition.(ObservedGeneration|LastTransitionTime) should be a pointer."
         path: "staging/src/k8s.io/api/apiserverinternal/v1alpha1/types.go"
-      - text: "optionalfields: field StorageVersion.Spec should be a pointer."
+      - text: "optionalfields: field StorageVersion.(Spec|Status) should (?:be a pointer|have the omitempty tag)\\."
         path: "staging/src/k8s.io/api/apiserverinternal/v1alpha1/types.go"
-      - text: "optionalfields: field StorageVersion.Status should be a pointer."
-        path: "staging/src/k8s.io/api/apiserverinternal/v1alpha1/types.go"
-      - text: "optionalfields: field StorageVersionCondition.LastTransitionTime should be a pointer."
-        path: "staging/src/k8s.io/api/apiserverinternal/v1alpha1/types.go"
-      - text: "optionalfields: field StorageVersion.Spec should have the omitempty tag."
-        path: "staging/src/k8s.io/api/apiserverinternal/v1alpha1/types.go"
-      - text: "optionalfields: field StorageVersion.Status should have the omitempty tag."
-        path: "staging/src/k8s.io/api/apiserverinternal/v1alpha1/types.go"
+      
       # Pre-existing issues from the conflictmarkers linter
       # The Error field in some older API types is marked as both optional and required.
       # This is incorrect, but cannot be changed without breaking changes.
@@ -227,11 +224,14 @@ linters:
         path: "staging/src/k8s.io/api/core/v1/types.go"
       - text: "type ResourceList should not use a map type, use a list type with a unique name/identifier instead"
         path: "staging/src/k8s.io/api/core/v1/types.go"
+      - text: "field NodeAllocatableResourceClaimStatus.Resources should not use a map type, use a list type with a unique name/identifier instead"
+        path: "staging/src/k8s.io/api/core/v1/types.go"
       
       ## For the Secret.Data and ConfigMap.BinaryData fields in the core API.
       - text: "field (Secret.Data|ConfigMap.BinaryData) should not use a map type, use a list type with a unique name/identifier instead"
         path: "staging/src/k8s.io/api/core/v1/types.go"
       
+        
       ## For map fields in the resource API (across all versions).
       - text: "field (CounterSet|DeviceCounterConsumption).Counters should not use a map type, use a list type with a unique name/identifier instead"
         path: "staging/src/k8s.io/api/resource/(v1|v1beta1|v1beta2)/types.go"
@@ -241,11 +241,15 @@ linters:
         path: "staging/src/k8s.io/api/resource/(v1|v1beta2)/types.go"
       - text: "field (CapacityRequirements.Requests|DeviceRequestAllocationResult.ConsumedCapacity) should not use a map type, use a list type with a unique name/identifier instead"
         path: "staging/src/k8s.io/api/resource/(v1|v1beta1|v1beta2)/types.go"
+      - text: "nomaps: field Device.NodeAllocatableResourceMappings should not use a map type, use a list type with a unique name/identifier instead"
+        path: "staging/src/k8s.io/api/resource/(v1|v1beta2)/types.go"
+      - text: "nomaps: field BasicDevice.NodeAllocatableResourceMappings should not use a map type, use a list type with a unique name/identifier instead"
+        path: "staging/src/k8s.io/api/resource/v1beta1/types.go"
       
       # OptionalOrRequired is being enabled over time. For now, each API group should be added to this list until we comb through each group and fix the missing tags.
       # The nonpointerstructs linter is included here as well as these two should be enabled hand-in-hand on each API group.
       - text: "must be marked as optional or required|is a non-pointer struct with no required fields."
-        path: "staging/src/k8s.io/api/(admissionregistration|apidiscovery|apps|authorization|autoscaling|batch|certificates|core|discovery|events|extensions|flowcontrol|networking|resource|storage)"
+        path: "staging/src/k8s.io/api/(admissionregistration|apidiscovery|apps|authorization|autoscaling|batch|certificates|core|discovery|events|extensions|flowcontrol|networking|storage)"
       
       # OptionalOrRequired - Existing fields that are marked as both optional and required (based on standard optional vs kubebuilder:validation:Required) and should not be fixed.
       - text: "field (PortStatus|IngressPortStatus)\\.Error must not be marked as both optional and required"
@@ -359,12 +363,6 @@ linters:
             contextual k8s.io/kubernetes/test/e2e/dra/.*
             contextual k8s.io/kubernetes/test/images/sample-device-plugin/.*
             contextual k8s.io/kubernetes/pkg/kubelet/.*
-            # Temporary carve-outs for PR1 split safety: these files still have legacy global klog calls.
-            # TODO: remove each exclusion as follow-up PRs migrate the file to contextual logging.
-            -contextual k8s.io/kubernetes/pkg/kubelet/kubelet_resources.go
-            -contextual k8s.io/kubernetes/pkg/kubelet/kubelet_volumes.go
-            -contextual k8s.io/kubernetes/pkg/kubelet/pod_container_deletor.go
-            -contextual k8s.io/kubernetes/pkg/kubelet/volume_host.go
       sorted:
         # Installed there by hack/verify-golangci-lint.sh.
         path: _output/local/bin/sorted.so
@@ -437,14 +435,14 @@ linters:
             #   jsonTagRegex: "^[a-z][a-z0-9]*(?:[A-Z][a-z0-9]*)*$" # The default regex is appropriate for our use case.
             # nomaps:
             #   policy: AllowStringToStringMaps # Determines how the linter should handle maps of basic types. Maps of objects are always disallowed.
-            # optionalFields:
-            #  pointers:
-            #    preference: Always | WhenRequired # Whether to always require pointers, or only when required. Defaults to `Always`.
-            #    policy: SuggestFix | Warn # The policy for pointers in optional fields. Defaults to `SuggestFix`.
-            #  omitempty:
-            #      policy: SuggestFix | Warn | Ignore # The policy for omitempty in optional fields. Defaults to `SuggestFix`.
-            #  omitzero:
-            #      policy: SuggestFix | Warn | Forbid # The policy for omitzero in optional fields. Defaults to `SuggestFix`.
+            optionalFields:
+             pointers:
+               preference: Always # Whether to always require pointers, or only when required. Defaults to `Always`.
+               policy: SuggestFix # The policy for pointers in optional fields. Defaults to `SuggestFix`.
+             omitempty:
+                 policy: SuggestFix # The policy for omitempty in optional fields. Defaults to `SuggestFix`.
+             omitzero:
+                 policy: Forbid # The policy for omitzero in optional fields. Defaults to `SuggestFix`.
             # optionalOrRequired:
             #   preferredOptionalMarker: optional # The preferred optional marker to use, fixes will suggest to use this marker. Defaults to `optional`.
             #   preferredRequiredMarker: required # The preferred required marker to use, fixes will suggest to use this marker. Defaults to `required`. 
@@ -495,7 +493,7 @@ linters:
           pkg: ^k8s\.io/client-go/applyconfigurations/
           msg: should not be used because managedFields was removed
         - pattern: \.Add$
-          pkg: ^k8s\.io/component-base/featuregate$         
+          pkg: ^k8s\.io/component-base/featuregate$
           msg: should not use Add, use AddVersioned instead
         - pattern: \.(ReportBeforeSuite|ReportAfterSuite)
           pkg: ^github\.com/onsi/ginkgo/v2$

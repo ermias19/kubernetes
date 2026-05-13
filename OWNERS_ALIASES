@@ -168,6 +168,7 @@ aliases:
   # - verult
   sig-scheduling-maintainers:
     - ahg-g
+    - ania-borowiec
     - dom4ha
     - Huang-Wei
     - kerthcet
@@ -188,6 +189,7 @@ aliases:
     - dom4ha
     - macsko
     - sanposhiho
+    - tosi3k
     - utam0k
     - kerthcet
   # emeritus:
@@ -352,6 +354,7 @@ aliases:
     - dgrisonnet
     - pohly
     - mengjiao-liu
+    - nmn3m
     - rexagod
     - richabanker
   api-approvers:

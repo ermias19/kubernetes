@@ -208,6 +208,10 @@ func (m *managerImpl) Start(ctx context.Context, diskInfoProvider DiskInfoProvid
 	// start the eviction manager monitoring
 	go func() {
 		for {
+			if err := ctx.Err(); err != nil {
+				logger.Info("Eviction manager: monitoring loop exiting", "err", err)
+				return
+			}
 			evictedPods, err := m.synchronize(ctx, diskInfoProvider, podFunc)
 			if evictedPods != nil && err == nil {
 				logger.Info("Eviction manager: pods evicted, waiting for pod to be cleaned up", "pods", klog.KObjSlice(evictedPods))
@@ -216,7 +220,12 @@ func (m *managerImpl) Start(ctx context.Context, diskInfoProvider DiskInfoProvid
 				if err != nil {
 					logger.Error(err, "Eviction manager: failed to synchronize")
 				}
-				time.Sleep(monitoringInterval)
+				select {
+				case <-ctx.Done():
+					logger.Info("Eviction manager: monitoring loop exiting", "err", ctx.Err())
+					return
+				case <-time.After(monitoringInterval):
+				}
 			}
 		}
 	}()
@@ -583,6 +592,15 @@ func (m *managerImpl) podEphemeralStorageLimitEviction(logger klog.Logger, podSt
 func (m *managerImpl) containerEphemeralStorageLimitEviction(logger klog.Logger, podStats statsapi.PodStats, pod *v1.Pod) bool {
 	thresholdsMap := make(map[string]*resource.Quantity)
 	for _, container := range pod.Spec.Containers {
+		ephemeralLimit := container.Resources.Limits.StorageEphemeral()
+		if ephemeralLimit != nil && ephemeralLimit.Value() != 0 {
+			thresholdsMap[container.Name] = ephemeralLimit
+		}
+	}
+	for _, container := range pod.Spec.InitContainers {
+		if !podutil.IsRestartableInitContainer(&container) {
+			continue
+		}
 		ephemeralLimit := container.Resources.Limits.StorageEphemeral()
 		if ephemeralLimit != nil && ephemeralLimit.Value() != 0 {
 			thresholdsMap[container.Name] = ephemeralLimit

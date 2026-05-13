@@ -436,7 +436,12 @@ func (m *kubeGenericRuntimeManager) updatePodSandboxResources(ctx context.Contex
 	_, err := m.runtimeService.UpdatePodSandboxResources(ctx, podResourcesRequest)
 	if err != nil {
 		stat, _ := grpcstatus.FromError(err)
-		if stat.Code() == codes.Unimplemented {
+		// Containerd 2.2 returns an error with code 'Unknown' and message 'not implemented yet' instead of
+		// an error with code 'Unimplemented'.
+		// This is being fixed in https://github.com/containerd/containerd/pull/13023, so this hardcoded
+		// string check can be removed once containerd 2.2 is no longer supported.
+		const unimplementedMsg = "not implemented"
+		if stat.Code() == codes.Unimplemented || (stat.Code() == codes.Unknown && strings.Contains(stat.Message(), unimplementedMsg)) {
 			logger.V(3).Info("updatePodSandboxResources failed: unimplemented; this call is best-effort: proceeding with resize", "sandboxID", sandboxID)
 			return nil
 		}
@@ -1134,6 +1139,10 @@ func (m *kubeGenericRuntimeManager) computeInitContainerActions(ctx context.Cont
 
 		case kubecontainer.ContainerStateRunning:
 			if !podutil.IsRestartableInitContainer(container) {
+				if utilfeature.DefaultFeatureGate.Enabled(features.InPlacePodVerticalScalingInitContainers) {
+					// computePodResizeAction updates 'changes' if resize policy requires restarting this container
+					_ = m.computePodResizeAction(ctx, pod, i, true, status, changes)
+				}
 				break
 			} else { // If container is restartable
 				if container.StartupProbe != nil {
