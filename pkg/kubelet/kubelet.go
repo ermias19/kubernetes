@@ -609,7 +609,7 @@ func NewMainKubelet(ctx context.Context,
 		rootDirectory:                filepath.Clean(rootDirectory),
 		podLogsDirectory:             podLogsDirectory,
 		resyncInterval:               kubeCfg.SyncFrequency.Duration,
-		sourcesReady:                 config.NewSourcesReady(kubeDeps.PodConfig.SeenAllSources),
+		sourcesReady:                 config.NewSourcesReady(kubeDeps.PodConfig.SourcesReadyFn(logger)),
 		registerNode:                 registerNode,
 		registerWithTaints:           registerWithTaints,
 		dnsConfigurer:                dns.NewConfigurer(kubeDeps.Recorder, nodeRef, nodeIPs, clusterDNS, kubeCfg.ClusterDomain, kubeCfg.ResolverConfig),
@@ -674,7 +674,7 @@ func NewMainKubelet(ctx context.Context,
 		klet.configMapManager = configMapManager
 	}
 
-	machineInfo, err := klet.cadvisor.MachineInfo()
+	machineInfo, err := klet.cadvisor.MachineInfo(logger)
 	if err != nil {
 		return nil, err
 	}
@@ -864,7 +864,7 @@ func NewMainKubelet(ctx context.Context,
 			RelistPeriod:    eventedPlegRelistPeriod,
 			RelistThreshold: eventedPlegRelistThreshold,
 		}
-		klet.pleg = pleg.NewGenericPLEG(logger, klet.containerRuntime, eventChannel, genericRelistDuration, podCache, clock.RealClock{})
+		klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, eventChannel, genericRelistDuration, podCache, clock.RealClock{})
 		// In case Evented PLEG has to fall back on Generic PLEG due to an error,
 		// Evented PLEG should be able to reset the Generic PLEG relisting duration
 		// to the default value.
@@ -872,7 +872,7 @@ func NewMainKubelet(ctx context.Context,
 			RelistPeriod:    genericPlegRelistPeriod,
 			RelistThreshold: genericPlegRelistThreshold,
 		}
-		klet.eventedPleg, err = pleg.NewEventedPLEG(logger, klet.containerRuntime, klet.runtimeService, eventChannel,
+		klet.eventedPleg, err = pleg.NewEventedPLEG(klet.containerRuntime, klet.runtimeService, eventChannel,
 			podCache, klet.pleg, eventedPlegMaxStreamRetries, eventedRelistDuration, clock.RealClock{})
 		if err != nil {
 			return nil, err
@@ -882,7 +882,7 @@ func NewMainKubelet(ctx context.Context,
 			RelistPeriod:    genericPlegRelistPeriod,
 			RelistThreshold: genericPlegRelistThreshold,
 		}
-		klet.pleg = pleg.NewGenericPLEG(logger, klet.containerRuntime, eventChannel, genericRelistDuration, podCache, clock.RealClock{})
+		klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, eventChannel, genericRelistDuration, podCache, clock.RealClock{})
 	}
 
 	klet.runtimeState = newRuntimeState(maxWaitForContainerRuntime)
@@ -1032,7 +1032,7 @@ func NewMainKubelet(ctx context.Context,
 	// NewInitializedVolumePluginMgr initializes some storageErrors on the Kubelet runtimeState (in csi_plugin.go init)
 	// which affects node ready status. This function must be called before Kubelet is initialized so that the Node
 	// ReadyState is accurate with the storage state.
-	klet.volumePluginMgr, err = NewInitializedVolumePluginMgr(klet, secretManager, configMapManager, tokenManager, clusterTrustBundleManager, kubeDeps.VolumePlugins, kubeDeps.DynamicPluginProber)
+	klet.volumePluginMgr, err = NewInitializedVolumePluginMgr(logger, klet, secretManager, configMapManager, tokenManager, clusterTrustBundleManager, kubeDeps.VolumePlugins, kubeDeps.DynamicPluginProber)
 	if err != nil {
 		return nil, err
 	}
@@ -1619,8 +1619,8 @@ func (kl *Kubelet) ImageFsStats(ctx context.Context) (*statsapi.FsStats, *statsa
 }
 
 // GetCgroupStats is delegated to StatsProvider, which implements stats.Provider interface
-func (kl *Kubelet) GetCgroupStats(cgroupName string, updateStats bool) (*statsapi.ContainerStats, *statsapi.NetworkStats, error) {
-	return kl.StatsProvider.GetCgroupStats(cgroupName, updateStats)
+func (kl *Kubelet) GetCgroupStats(ctx context.Context, cgroupName string, updateStats bool) (*statsapi.ContainerStats, *statsapi.NetworkStats, error) {
+	return kl.StatsProvider.GetCgroupStats(ctx, cgroupName, updateStats)
 }
 
 // GetCgroupCPUAndMemoryStats is delegated to StatsProvider, which implements stats.Provider interface
@@ -1694,7 +1694,7 @@ func (kl *Kubelet) setupDataDirs(logger klog.Logger) error {
 func (kl *Kubelet) StartGarbageCollection(ctx context.Context) {
 	logger := klog.FromContext(ctx)
 	loggedContainerGCFailure := false
-	go wait.Until(func() {
+	go wait.UntilWithContext(ctx, func(ctx context.Context) {
 		if err := kl.containerGC.GarbageCollect(ctx); err != nil {
 			logger.Error(err, "Container garbage collection failed")
 			kl.recorder.WithLogger(logger).Eventf(kl.nodeRef, v1.EventTypeWarning, events.ContainerGCFailed, "%s", err.Error())
@@ -1708,7 +1708,7 @@ func (kl *Kubelet) StartGarbageCollection(ctx context.Context) {
 
 			logger.V(int(vLevel)).Info("Container garbage collection succeeded")
 		}
-	}, ContainerGCPeriod, wait.NeverStop)
+	}, ContainerGCPeriod)
 
 	// when the high threshold is set to 100, and the max age is 0 (or the max age feature is disabled)
 	// stub the image GC manager
@@ -1719,7 +1719,7 @@ func (kl *Kubelet) StartGarbageCollection(ctx context.Context) {
 
 	prevImageGCFailed := false
 	beganGC := time.Now()
-	go wait.Until(func() {
+	go wait.UntilWithContext(ctx, func(ctx context.Context) {
 		if err := kl.imageManager.GarbageCollect(ctx, beganGC); err != nil {
 			if prevImageGCFailed {
 				logger.Error(err, "Image garbage collection failed multiple times in a row")
@@ -1738,7 +1738,7 @@ func (kl *Kubelet) StartGarbageCollection(ctx context.Context) {
 
 			logger.V(int(vLevel)).Info("Image garbage collection succeeded")
 		}
-	}, ImageGCPeriod, wait.NeverStop)
+	}, ImageGCPeriod)
 }
 
 // initializeModules will initialize internal modules that do not require the container runtime to be up.
@@ -1811,7 +1811,7 @@ func (kl *Kubelet) initializeRuntimeDependentModules(ctx context.Context) {
 
 	// trigger on-demand stats collection once so that we have capacity information for ephemeral storage.
 	// ignore any errors, since if stats collection is not successful, the container manager will fail to start below.
-	kl.StatsProvider.GetCgroupStats("/", true)
+	_, _, _ = kl.StatsProvider.GetCgroupStats(ctx, "/", true)
 	// Start container manager.
 	node, err := kl.getNodeAnyWay(ctx)
 	if err != nil {
@@ -1931,7 +1931,9 @@ func (kl *Kubelet) Run(ctx context.Context, updates <-chan kubetypes.PodUpdate) 
 			wait.JitterUntil(func() { kl.syncNodeStatus(ctx) }, kl.nodeStatusUpdateFrequency, 0.04, true, wait.NeverStop)
 		}()
 
-		go kl.fastStatusUpdateOnce()
+		// Keep the previous detached behavior from context.Background while still
+		// propagating logging values for contextual logging.
+		go kl.fastStatusUpdateOnce(context.WithoutCancel(ctx))
 
 		// Keep renewing the node lease until the kubelet exits.
 		// This intentionally does not use the kubelet context so lease renewal can
@@ -1961,11 +1963,11 @@ func (kl *Kubelet) Run(ctx context.Context, updates <-chan kubetypes.PodUpdate) 
 	}
 
 	// Start the pod lifecycle event generator.
-	kl.pleg.Start()
+	kl.pleg.Start(ctx)
 
 	// Start eventedPLEG only if EventedPLEG feature gate is enabled.
 	if utilfeature.DefaultFeatureGate.Enabled(features.EventedPLEG) {
-		kl.eventedPleg.Start()
+		kl.eventedPleg.Start(ctx)
 	}
 
 	if kl.healthChecker != nil {
@@ -2278,7 +2280,7 @@ func (kl *Kubelet) SyncPod(ctx context.Context, updateType kubetypes.SyncPodType
 	err = result.Error()
 	if len(result.SyncResults) > 0 && err == nil {
 		postSync = func() {
-			kl.RequestPodRelist(pod.UID)
+			kl.RequestPodRelist(klog.FromContext(ctx), pod.UID)
 		}
 	}
 
@@ -2910,7 +2912,7 @@ func (kl *Kubelet) HandlePodAdditions(ctx context.Context, pods []*v1.Pod) {
 			kl.allocationManager.PushPendingResize(uid)
 		}
 		if len(pendingResizes) > 0 {
-			kl.allocationManager.RetryPendingResizes(allocation.TriggerReasonPodsAdded)
+			kl.allocationManager.RetryPendingResizes(ctx, allocation.TriggerReasonPodsAdded)
 		}
 	}
 }
@@ -2939,7 +2941,7 @@ func (kl *Kubelet) HandlePodUpdates(ctx context.Context, pods []*v1.Pod) {
 					kl.allocationManager.PushPendingResize(pod.UID)
 					// TODO(natasha41575): If the resize is immediately actuated, it will trigger a pod sync
 					// and we will end up calling UpdatePod twice. Figure out if there is a way to avoid this.
-					kl.allocationManager.RetryPendingResizes(allocation.TriggerReasonPodUpdated)
+					kl.allocationManager.RetryPendingResizes(ctx, allocation.TriggerReasonPodUpdated)
 				} else {
 					// We can hit this case if a pending resize has been reverted,
 					// so we need to clear the pending resize condition.
@@ -3095,7 +3097,7 @@ func (kl *Kubelet) HandlePodRemoves(ctx context.Context, pods []*v1.Pod) {
 	}
 
 	if utilfeature.DefaultFeatureGate.Enabled(features.InPlacePodVerticalScaling) {
-		kl.allocationManager.RetryPendingResizes(allocation.TriggerReasonPodsRemoved)
+		kl.allocationManager.RetryPendingResizes(ctx, allocation.TriggerReasonPodsRemoved)
 	}
 }
 
@@ -3186,7 +3188,7 @@ func (kl *Kubelet) HandlePodReconcile(ctx context.Context, pods []*v1.Pod) {
 
 	if utilfeature.DefaultFeatureGate.Enabled(features.InPlacePodVerticalScaling) {
 		if retryPendingResizes {
-			kl.allocationManager.RetryPendingResizes(triggerReason)
+			kl.allocationManager.RetryPendingResizes(ctx, triggerReason)
 		}
 	}
 }
@@ -3388,8 +3390,7 @@ func (kl *Kubelet) cleanUpContainersInPod(ctx context.Context, podID types.UID, 
 // Function returns after the node status update after such event, or when the node is already ready.
 // Function is executed only during Kubelet start which improves latency to ready node by updating
 // kubelet state, runtime status and node statuses ASAP.
-func (kl *Kubelet) fastStatusUpdateOnce() {
-	ctx := context.Background()
+func (kl *Kubelet) fastStatusUpdateOnce(ctx context.Context) {
 	start := kl.clock.Now()
 	stopCh := make(chan struct{})
 
@@ -3537,13 +3538,13 @@ func (kl *Kubelet) RequestPodReinspect(podUID types.UID) {
 	kl.pleg.RequestReinspect(podUID)
 }
 
-func (kl *Kubelet) RequestPodRelist(podUID types.UID) {
-	kl.pleg.RequestRelist(podUID)
+func (kl *Kubelet) RequestPodRelist(logger klog.Logger, podUID types.UID) {
+	kl.pleg.RequestRelist(logger, podUID)
 }
 
-func (kl *Kubelet) syncPodNow(pod *v1.Pod) {
-	kl.HandlePodSyncs(context.Background(), []*v1.Pod{pod})
-	kl.RequestPodRelist(pod.UID)
+func (kl *Kubelet) syncPodNow(ctx context.Context, pod *v1.Pod) {
+	kl.HandlePodSyncs(ctx, []*v1.Pod{pod})
+	kl.RequestPodRelist(klog.FromContext(ctx), pod.UID)
 }
 
 // OnPodSandboxReady is the callback implementation invoked by the container runtime after

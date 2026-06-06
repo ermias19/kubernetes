@@ -392,9 +392,9 @@ func collectRules(node *typeNode) fieldRules {
 		}
 	}
 
-	var walkNode func(*typeNode, string)
+	var walkNode func(*typeNode, string, bool, bool)
 	var walkChild func(*childNode, string)
-	walkNode = func(n *typeNode, path string) {
+	walkNode = func(n *typeNode, path string, skipElem, skipKey bool) {
 		if n == nil || seen[n] {
 			return
 		}
@@ -411,10 +411,10 @@ func collectRules(node *typeNode) fieldRules {
 		for _, fld := range n.fields {
 			walkChild(fld, joinPath(path, fld.jsonName))
 		}
-		if n.elem != nil {
+		if n.elem != nil && !skipElem {
 			walkChild(n.elem, joinPath(path, "[*]"))
 		}
-		if n.key != nil {
+		if n.key != nil && !skipKey {
 			walkChild(n.key, path)
 		}
 		if n.underlying != nil {
@@ -428,22 +428,27 @@ func collectRules(node *typeNode) fieldRules {
 		record(path, c.fieldValidations.Functions)
 		record(joinPath(path, "[*]"), c.fieldValIterations.Functions)
 		record(path, c.fieldKeyIterations.Functions)
-		walkNode(c.node, path)
+		walkNode(c.node, path, c.fieldValidations.OpaqueValType, c.fieldValidations.OpaqueKeyType)
+
 	}
-	walkNode(node, "")
+	walkNode(node, "", false, false)
 	return rules
 }
 
 // recordRules descends fg, accumulating Wrapper/MultiWrapperFunction
 // PathFragments into suffix, and records (basePath+suffix, Rule) at each
-// emitting leaf (Emits != nil).
+// emitting leaf. A FunctionGen may declare multiple Emissions when the
+// runtime emits errors of different types or at different path fragments
+// from the same call (e.g. UpdateSlice with NoAddItem and NoRemoveItem).
 func recordRules(rules fieldRules, basePath string, fg validators.FunctionGen, suffix string) {
-	if fg.Emits != nil {
-		path := basePath + suffix + fg.Emits.PathFragment
-		rules[path] = append(rules[path], rule{
-			ErrorType: string(fg.Emits.Type),
-			Origin:    fg.Emits.Origin,
-		})
+	if len(fg.Emits) > 0 {
+		for _, e := range fg.Emits {
+			path := basePath + suffix + e.PathFragment
+			rules[path] = append(rules[path], rule{
+				ErrorType: string(e.Type),
+				Origin:    e.Origin,
+			})
+		}
 		return
 	}
 	for _, arg := range fg.Args {

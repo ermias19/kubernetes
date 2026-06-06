@@ -104,10 +104,10 @@ const (
 	// kep: http://kep.k8s.io/5073
 	// beta: v1.33
 	//
-	// Enables running declarative validation of APIs, where declared. When enabled, APIs with
-	// declarative validation rules will validate objects using the generated
-	// declarative validation code and compare the results to the regular imperative validation.
-	// See DeclarativeValidationBeta for more.
+	// When enabled, results of declarative validation are compared against handwritten
+	// validation and mismatches are logged as metrics. Declarative validation itself is
+	// always executed independent of this gate; per-tag enforcement is controlled by the
+	// lifecycle prefix and the DeclarativeValidationBeta gate.
 	DeclarativeValidation featuregate.Feature = "DeclarativeValidation"
 
 	// owner: @jpbetz @aaron-prindle @yongruilin
@@ -120,11 +120,10 @@ const (
 	// In Shadow mode, declarative validation is executed and mismatches against handwritten
 	// validation are logged as metrics, but failures do not reject requests.
 	// Handwritten validation remains authoritative and enforced.
-	// Enforcement logic for resources using WithDeclarativeEnforcement():
+	// Enforcement by lifecycle prefix:
 	// - Standard tags (no prefix): Always Enforced (Bypasses this gate).
 	// - Beta tags (+k8s:beta): Enforced when this gate is enabled (default), otherwise Shadowed.
 	// - Alpha tags (+k8s:alpha): Always Shadowed.
-	// This gate has no effect if the master DeclarativeValidation feature gate is disabled.
 	DeclarativeValidationBeta featuregate.Feature = "DeclarativeValidationBeta"
 
 	// owner: @jpbetz @aaron-prindle @yongruilin
@@ -146,6 +145,11 @@ const (
 	//
 	// Enabled cache inconsistency detection.
 	DetectCacheInconsistency featuregate.Feature = "DetectCacheInconsistency"
+
+	// owner: @jefftree
+	//
+	// Enables the RangeStream RPC for list operations in etcd.
+	EtcdRangeStream featuregate.Feature = "EtcdRangeStream"
 
 	// owner: @aramase
 	// kep: https://kep.k8s.io/3299
@@ -348,10 +352,15 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 	DeclarativeValidationTakeover: {
 		{Version: version.MustParse("1.33"), Default: false, PreRelease: featuregate.Beta},
 		{Version: version.MustParse("1.36"), Default: false, PreRelease: featuregate.Deprecated},
+		{Version: version.MustParse("1.37"), Default: false, PreRelease: featuregate.Deprecated, LockToDefault: true},
 	},
 
 	DetectCacheInconsistency: {
 		{Version: version.MustParse("1.34"), Default: true, PreRelease: featuregate.Beta},
+	},
+
+	EtcdRangeStream: {
+		{Version: version.MustParse("1.37"), Default: false, PreRelease: featuregate.Beta},
 	},
 
 	KMSv1: {
@@ -433,6 +442,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 	WatchCacheInitializationPostStartHook: {
 		{Version: version.MustParse("1.31"), Default: false, PreRelease: featuregate.Beta},
 		{Version: version.MustParse("1.36"), Default: true, PreRelease: featuregate.Beta},
+		{Version: version.MustParse("1.37"), Default: true, PreRelease: featuregate.GA, LockToDefault: true},
 	},
 
 	WatchList: {

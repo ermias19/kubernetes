@@ -25,7 +25,6 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/apitesting"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -42,6 +41,7 @@ import (
 	etcd3testing "k8s.io/apiserver/pkg/storage/etcd3/testing"
 	"k8s.io/apiserver/pkg/storage/etcd3/testserver"
 	storagetesting "k8s.io/apiserver/pkg/storage/testing"
+	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/apiserver/pkg/storage/value/encrypt/identity"
 	"k8s.io/utils/clock"
 )
@@ -62,17 +62,28 @@ func init() {
 	scheme.AddUnversionedTypes(corev1.SchemeGroupVersion, &metav1.Status{})
 	pb := protobuf.NewSerializer(scheme, scheme)
 	corev1ProtoCodec = codecs.CodecForVersions(pb, pb, schema.GroupVersions{corev1.SchemeGroupVersion}, nil)
+	examplev1ProtoCodec = codecs.CodecForVersions(pb, pb, schema.GroupVersions{examplev1.SchemeGroupVersion}, nil)
 }
 
-var corev1ProtoCodec runtime.Codec
+var (
+	corev1ProtoCodec    runtime.Codec
+	examplev1ProtoCodec runtime.Codec
+)
 
 func newPod() runtime.Object     { return &example.Pod{} }
 func newPodList() runtime.Object { return &example.PodList{} }
 
 func newEtcdTestStorage(t testing.TB, prefix string) (*etcd3testing.EtcdTestServer, storage.Interface) {
+	return newEtcdTestStorageWithCodec(t, prefix, examplev1ProtoCodec)
+}
+
+func newEtcdTestStorageWithCodec(t testing.TB, prefix string, codec runtime.Codec) (*etcd3testing.EtcdTestServer, storage.Interface) {
+	return newEtcdTestStorageWithOptions(t, prefix, codec, identity.NewEncryptCheckTransformer())
+}
+
+func newEtcdTestStorageWithOptions(t testing.TB, prefix string, codec runtime.Codec, transformer value.Transformer) (*etcd3testing.EtcdTestServer, storage.Interface) {
 	server, _ := etcd3testing.NewUnsecuredEtcd3TestClientServer(t)
 	versioner := storage.APIObjectVersioner{}
-	codec := apitesting.TestCodec(codecs, examplev1.SchemeGroupVersion)
 	compactor := etcd3.NewCompactor(server.V3Client.Client, 0, clock.RealClock{}, nil)
 	t.Cleanup(compactor.Stop)
 	storage, err := etcd3.New(
@@ -84,7 +95,7 @@ func newEtcdTestStorage(t testing.TB, prefix string) (*etcd3testing.EtcdTestServ
 		prefix,
 		"/pods/",
 		schema.GroupResource{Resource: "pods"},
-		identity.NewEncryptCheckTransformer(),
+		transformer,
 		etcd3.NewDefaultLeaseManagerConfig(),
 		etcd3.NewDefaultDecoder(codec, versioner),
 		versioner)
@@ -149,12 +160,12 @@ func compactWatch(c *CacheDelegator, client *clientv3.Client) storagetesting.Com
 			t.Fatal(err)
 		}
 
-		err = c.cacher.watchCache.waitUntilFreshAndBlock(context.TODO(), rv)
+		c.cacher.watchCache.RLock()
+		err = c.cacher.watchCache.waitUntilFreshLocked(context.TODO(), rv)
+		c.cacher.watchCache.RUnlock()
 		if err != nil {
 			t.Fatalf("WatchCache didn't caught up to RV: %v", rv)
 		}
-		c.cacher.watchCache.RUnlock()
-
 		c.cacher.watchCache.Lock()
 		defer c.cacher.watchCache.Unlock()
 		c.cacher.Lock()

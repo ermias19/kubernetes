@@ -332,7 +332,7 @@ func (sched *Scheduler) deletePodFromSchedulingQueue(pod *v1.Pod, inBinding bool
 	logger := sched.logger
 
 	logger.V(3).Info("Delete event for unscheduled pod", "pod", klog.KObj(pod))
-	sched.SchedulingQueue.Delete(pod)
+	sched.SchedulingQueue.Delete(logger, pod)
 	if inBinding {
 		// In the case of a binding, the rest can be skipped because it is not really a pod removal operation, but a binding.
 		// Any necessary notifications will be sent by the binding process, unless it was an unlikely external binding.
@@ -623,7 +623,7 @@ func addAllEventHandlers(
 			handlers = append(handlers, handlerRegistration)
 		case fwk.PodGroup:
 			if utilfeature.DefaultFeatureGate.Enabled(features.GenericWorkload) {
-				if handlerRegistration, err = informerFactory.Scheduling().V1alpha2().PodGroups().Informer().AddEventHandler(
+				if handlerRegistration, err = informerFactory.Scheduling().V1alpha3().PodGroups().Informer().AddEventHandler(
 					buildEvtResHandler(at, fwk.PodGroup),
 				); err != nil {
 					return err

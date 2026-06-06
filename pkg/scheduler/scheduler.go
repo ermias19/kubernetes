@@ -31,7 +31,7 @@ import (
 	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
-	schedulinglisters "k8s.io/client-go/listers/scheduling/v1alpha2"
+	schedulinglisters "k8s.io/client-go/listers/scheduling/v1alpha3"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	resourceslicetracker "k8s.io/dynamic-resource-allocation/resourceslice/tracker"
@@ -72,11 +72,11 @@ type Scheduler struct {
 
 	Extenders []fwk.Extender
 
-	// NextPod should be a function that blocks until the next pod
+	// NextEntity should be a function that blocks until the next entity (pod or pod group)
 	// is available. We don't use a channel for this, because scheduling
 	// a pod may take some amount of time and we don't want pods to get
 	// stale while they sit in a channel.
-	NextPod func(logger klog.Logger) (*framework.QueuedPodInfo, error)
+	NextEntity func(logger klog.Logger) (framework.QueuedEntityInfo, error)
 
 	// FailureHandler is called upon a scheduling failure.
 	FailureHandler FailureHandlerFn
@@ -315,7 +315,7 @@ func New(ctx context.Context,
 	nodeLister := informerFactory.Core().V1().Nodes().Lister()
 	var podGroupLister schedulinglisters.PodGroupLister
 	if feature.DefaultFeatureGate.Enabled(features.GenericWorkload) {
-		podGroupLister = informerFactory.Scheduling().V1alpha2().PodGroups().Lister()
+		podGroupLister = informerFactory.Scheduling().V1alpha3().PodGroups().Lister()
 	}
 
 	snapshot := internalcache.NewEmptySnapshot()
@@ -457,7 +457,7 @@ func New(ctx context.Context,
 		genericWorkloadEnabled:                 feature.DefaultFeatureGate.Enabled(features.GenericWorkload),
 		workloadAwarePreemptionEnabled:         feature.DefaultFeatureGate.Enabled(features.WorkloadAwarePreemption),
 	}
-	sched.NextPod = podQueue.Pop
+	sched.NextEntity = podQueue.Pop
 	sched.applyDefaultHandlers()
 
 	if err = addAllEventHandlers(sched, informerFactory, dynInformerFactory, resourceClaimCache, resourceSliceTracker, draManager, unionedGVKs(queueingHintsPerProfile)); err != nil {

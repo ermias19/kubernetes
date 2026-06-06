@@ -38,7 +38,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
-	schedulingv1alpha2 "k8s.io/api/scheduling/v1alpha2"
+	schedulingv1alpha3 "k8s.io/api/scheduling/v1alpha3"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -50,7 +50,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	clientsetfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
-	schedulinglisters "k8s.io/client-go/listers/scheduling/v1alpha2"
+	schedulinglisters "k8s.io/client-go/listers/scheduling/v1alpha3"
 	clienttesting "k8s.io/client-go/testing"
 	clientcache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/events"
@@ -1041,12 +1041,12 @@ func TestSchedulerScheduleOne(t *testing.T) {
 			item.expectErrorPod = withSchedulingGroup(item.expectErrorPod, group)
 			item.expectPodInBackoffQ = withSchedulingGroup(item.expectPodInBackoffQ, group)
 			if item.expectPodInUnschedulable != nil {
-				// Pods from a pod group skip unschedulablePods structure and land directly in the backoffQ.
+				// Pods from a pod group skip unschedulableEntities structure and land directly in the backoffQ.
 				item.expectPodInBackoffQ = withSchedulingGroup(item.expectPodInUnschedulable, group)
 				item.expectPodInUnschedulable = nil
 			}
 
-			testPG := &schedulingv1alpha2.PodGroup{
+			testPG := &schedulingv1alpha3.PodGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "pg", Namespace: item.sendPod.Namespace},
 			}
 			clientObjs = []runtime.Object{item.sendPod, testPG}
@@ -1073,7 +1073,7 @@ func TestSchedulerScheduleOne(t *testing.T) {
 		internalCache := internalcache.New(ctx, apiDispatcher, scheduleAsPodGroup)
 
 		if scheduleAsPodGroup {
-			podGroupLister = informerFactory.Scheduling().V1alpha2().PodGroups().Lister()
+			podGroupLister = informerFactory.Scheduling().V1alpha3().PodGroups().Lister()
 			internalCache.AddPodGroupMember(item.sendPod)
 		}
 		cache := &fakecache.Cache{
@@ -1147,7 +1147,7 @@ func TestSchedulerScheduleOne(t *testing.T) {
 		sched := &Scheduler{
 			Cache:                                  cache,
 			client:                                 client,
-			NextPod:                                queue.Pop,
+			NextEntity:                             queue.Pop,
 			SchedulingQueue:                        queue,
 			Profiles:                               profile.Map{testSchedulerName: schedFramework},
 			APIDispatcher:                          apiDispatcher,
@@ -1250,7 +1250,14 @@ func TestSchedulerScheduleOne(t *testing.T) {
 		}
 		podsInBackoffQ := queue.PodsInBackoffQ()
 		if item.expectPodInBackoffQ != nil {
-			if !podListContainsPod(podsInBackoffQ, item.expectPodInBackoffQ) {
+			if scheduleAsPodGroup {
+				// For pod groups, the pod might be in pending pod group pods instead of backoffQ.
+				// We can check if it's still in the scheduling queue via GetPod.
+				_, ok := queue.GetPod(item.expectPodInBackoffQ.Name, item.expectPodInBackoffQ.Namespace, item.expectPodInBackoffQ.Spec.SchedulingGroup)
+				if !ok {
+					t.Errorf("Expected to find pod in scheduling queue, but it's not there.\nWant: %v", item.expectPodInBackoffQ)
+				}
+			} else if !podListContainsPod(podsInBackoffQ, item.expectPodInBackoffQ) {
 				t.Errorf("Expected to find pod in backoffQ, but it's not there.\nWant: %v,\ngot: %v", item.expectPodInBackoffQ, podsInBackoffQ)
 			}
 		} else {
@@ -1353,7 +1360,8 @@ func TestHandleSchedulingFailureSkipsRecreatedPod(t *testing.T) {
 	}
 
 	nominatingInfo := &fwk.NominatingInfo{NominatingMode: fwk.ModeOverride, NominatedNodeName: "node1"}
-	sched.handleSchedulingFailure(ctx, schedFramework, popped, fwk.NewStatus(fwk.Unschedulable, "no fit"), nominatingInfo, time.Now())
+	poppedPod := popped.(*framework.QueuedPodInfo)
+	sched.handleSchedulingFailure(ctx, schedFramework, poppedPod, fwk.NewStatus(fwk.Unschedulable, "no fit"), nominatingInfo, time.Now())
 
 	if err := wait.PollUntilContextTimeout(ctx, time.Millisecond, wait.ForeverTestTimeout, false, func(context.Context) (bool, error) {
 		return len(queue.InFlightPods()) == 0, nil
@@ -1840,7 +1848,7 @@ func TestScheduleOneMarksPodAsProcessedBeforePreBind(t *testing.T) {
 				sched := &Scheduler{
 					Cache:           cache,
 					client:          client,
-					NextPod:         queue.Pop,
+					NextEntity:      queue.Pop,
 					SchedulingQueue: queue,
 					Profiles:        profile.Map{testSchedulerName: schedFramework},
 					APIDispatcher:   apiDispatcher,
@@ -4715,7 +4723,7 @@ func setupTestScheduler(ctx context.Context, t *testing.T, client clientset.Inte
 		client:                   client,
 		nodeInfoSnapshot:         snapshot,
 		percentageOfNodesToScore: schedulerapi.DefaultPercentageOfNodesToScore,
-		NextPod: func(logger klog.Logger) (*framework.QueuedPodInfo, error) {
+		NextEntity: func(logger klog.Logger) (framework.QueuedEntityInfo, error) {
 			return &framework.QueuedPodInfo{PodInfo: mustNewPodInfo(t, pop(queuedPodStore).(*v1.Pod))}, nil
 		},
 		SchedulingQueue: schedulingQueue,

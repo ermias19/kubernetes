@@ -18,12 +18,16 @@ package cacher
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/stretchr/testify/require"
 
+	"k8s.io/apimachinery/pkg/api/apitesting"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -37,8 +41,10 @@ import (
 	examplev1 "k8s.io/apiserver/pkg/apis/example/v1"
 	"k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/storage"
+	"k8s.io/apiserver/pkg/storage/etcd3"
 	etcd3testing "k8s.io/apiserver/pkg/storage/etcd3/testing"
 	storagetesting "k8s.io/apiserver/pkg/storage/testing"
+	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/apiserver/pkg/storage/value/encrypt/identity"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	clientfeatures "k8s.io/client-go/features"
@@ -159,6 +165,79 @@ func TestDeleteWithConflict(t *testing.T) {
 	ctx, cacher, terminate := testSetup(t)
 	t.Cleanup(terminate)
 	storagetesting.RunTestDeleteWithConflict(ctx, t, cacher)
+}
+
+type testTransformer struct {
+	value.Transformer
+	fail atomic.Bool
+}
+
+func (tt *testTransformer) setFailing(c bool) {
+	tt.fail.Store(c)
+}
+
+func (tt *testTransformer) TransformFromStorage(ctx context.Context, data []byte, dataCtx value.Context) (out []byte, stale bool, err error) {
+	if tt.fail.Load() {
+		return nil, false, errors.New("synthetic error")
+	}
+	return tt.Transformer.TransformFromStorage(ctx, data, dataCtx)
+}
+
+type testCodec struct {
+	runtime.Codec
+	fail atomic.Bool
+}
+
+func (tc *testCodec) setFailing(c bool) {
+	tc.fail.Store(c)
+}
+
+func (tc *testCodec) Decode(data []byte, defaults *schema.GroupVersionKind, into runtime.Object) (runtime.Object, *schema.GroupVersionKind, error) {
+	if tc.fail.Load() {
+		return nil, nil, errors.New("synthetic error")
+	}
+	return tc.Codec.Decode(data, defaults, into)
+}
+
+func TestDeleteWithConflictAndMissingExpectedTransformOrDecodeError(t *testing.T) {
+	featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.AllowUnsafeMalformedObjectDeletion, true)
+
+	transformer := &testTransformer{Transformer: identity.NewEncryptCheckTransformer()}
+	ctx, s, _ := testSetup(t, withTransformer(transformer))
+
+	storagetesting.RunTestDeleteWithConflictAndMissingExpectedTransformOrDecodeError(ctx, t, s, transformer.setFailing)
+}
+
+func TestDeleteWithConflictAndExpectedTransformError(t *testing.T) {
+	featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.AllowUnsafeMalformedObjectDeletion, true)
+
+	transformer := &testTransformer{Transformer: identity.NewEncryptCheckTransformer()}
+	ctx, cacher, terminate := testSetup(t, withTransformer(transformer))
+	t.Cleanup(terminate)
+
+	storagetesting.RunTestDeleteExpectedTransformOrDecodeError(ctx, t, cacher, transformer.setFailing)
+}
+
+func TestDeleteWithConflictAndExpectedDecodeError(t *testing.T) {
+	featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.AllowUnsafeMalformedObjectDeletion, true)
+
+	// Decode errors cause a panic when they occur during tests. Disable for this particular
+	// test since it is deliberately exercising a case where the stored bytes cannot be decoded.
+	etcd3.TestOnlySetFatalOnDecodeError(t, false)
+
+	codec := &testCodec{Codec: apitesting.TestCodec(codecs, examplev1.SchemeGroupVersion)}
+	ctx, cacher, terminate := testSetup(t, withCodec(codec))
+	t.Cleanup(terminate)
+
+	storagetesting.RunTestDeleteExpectedTransformOrDecodeError(ctx, t, cacher, codec.setFailing)
+}
+
+func TestDeleteWithSuggestionAndMissingExpectedTransformOrDecodeError(t *testing.T) {
+	featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.AllowUnsafeMalformedObjectDeletion, true)
+
+	ctx, cacher, terminate := testSetup(t)
+	t.Cleanup(terminate)
+	storagetesting.RunTestDeleteWithSuggestionAndMissingExpectedTransformOrDecodeError(ctx, t, cacher)
 }
 
 func TestPreconditionalDeleteWithSuggestion(t *testing.T) {
@@ -381,7 +460,7 @@ func TestStats(t *testing.T) {
 			featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.SizeBasedListCostEstimate, sizeBasedListCostEstimate)
 			ctx, cacher, terminate := testSetup(t)
 			t.Cleanup(terminate)
-			storagetesting.RunTestStats(ctx, t, cacher, codecs.LegacyCodec(examplev1.SchemeGroupVersion), identity.NewEncryptCheckTransformer(), sizeBasedListCostEstimate)
+			storagetesting.RunTestStats(ctx, t, cacher, examplev1ProtoCodec, identity.NewEncryptCheckTransformer(), sizeBasedListCostEstimate)
 		})
 	}
 }
@@ -492,6 +571,8 @@ type setupOptions struct {
 	indexerFuncs   map[string]storage.IndexerFunc
 	indexers       cache.Indexers
 	clock          clock.WithTicker
+	codec          runtime.Codec
+	transformer    value.Transformer
 }
 
 type setupOption func(*setupOptions)
@@ -502,6 +583,8 @@ func withDefaults(options *setupOptions) {
 	options.resourcePrefix = prefix
 	options.keyFunc = func(obj runtime.Object) (string, error) { return storage.NamespaceKeyFunc(prefix, obj) }
 	options.clock = clock.RealClock{}
+	options.codec = examplev1ProtoCodec
+	options.transformer = identity.NewEncryptCheckTransformer()
 }
 
 func withClusterScopedKeyFunc(options *setupOptions) {
@@ -533,6 +616,18 @@ func withNodeNameAndNamespaceIndex(options *setupOptions) {
 	}
 }
 
+func withCodec(codec runtime.Codec) setupOption {
+	return func(options *setupOptions) {
+		options.codec = codec
+	}
+}
+
+func withTransformer(transformer value.Transformer) setupOption {
+	return func(options *setupOptions) {
+		options.transformer = transformer
+	}
+}
+
 func testSetup(t *testing.T, opts ...setupOption) (context.Context, *CacheDelegator, tearDownFunc) {
 	ctx, cacher, _, tearDown := testSetupWithEtcdServer(t, opts...)
 	return ctx, cacher, tearDown
@@ -545,7 +640,7 @@ func testSetupWithEtcdServer(t testing.TB, opts ...setupOption) (context.Context
 		opt(&setupOpts)
 	}
 
-	server, etcdStorage := newEtcdTestStorage(t, etcd3testing.PathPrefix())
+	server, etcdStorage := newEtcdTestStorageWithOptions(t, etcd3testing.PathPrefix(), setupOpts.codec, setupOpts.transformer)
 	// Inject one list error to make sure we test the relist case.
 	listErrors := 1
 	if clientfeatures.FeatureGates().Enabled(clientfeatures.WatchListClient) {
@@ -570,7 +665,7 @@ func testSetupWithEtcdServer(t testing.TB, opts ...setupOption) (context.Context
 		NewListFunc:         newPodList,
 		IndexerFuncs:        setupOpts.indexerFuncs,
 		Indexers:            &setupOpts.indexers,
-		Codec:               codecs.LegacyCodec(examplev1.SchemeGroupVersion),
+		Codec:               setupOpts.codec,
 		Clock:               setupOpts.clock,
 	}
 	cacher, err := NewCacherFromConfig(config)
@@ -630,22 +725,27 @@ func (c *createWrapper) Create(ctx context.Context, key string, obj, out runtime
 		return true, nil
 	})
 }
-
-func BenchmarkStoreCreateList(b *testing.B) {
+func BenchmarkStoreWriteThroughput(b *testing.B) {
 	klog.SetLogger(logr.Discard())
-	for _, rvm := range []metav1.ResourceVersionMatch{metav1.ResourceVersionMatchNotOlderThan, metav1.ResourceVersionMatchExact} {
-		b.Run(fmt.Sprintf("RV=%s", rvm), func(b *testing.B) {
-			for _, useIndex := range []bool{true, false} {
-				b.Run(fmt.Sprintf("Indexed=%v", useIndex), func(b *testing.B) {
-					opts := []setupOption{}
-					if useIndex {
-						opts = append(opts, withNodeNameAndNamespaceIndex)
-					}
-					ctx, cacher, _, terminate := testSetupWithEtcdServer(b, opts...)
-					b.Cleanup(terminate)
-					storagetesting.RunBenchmarkStoreListCreate(ctx, b, cacher, rvm)
-				})
-			}
+	dimensions := []struct {
+		namespaceCount       int
+		podPerNamespaceCount int
+		nodeCount            int
+	}{
+		{
+			namespaceCount:       50,
+			podPerNamespaceCount: 3_000,
+			nodeCount:            5_000,
+		},
+	}
+	for _, dims := range dimensions {
+		b.Run(fmt.Sprintf("Namespaces=%d/Pods=%d/Nodes=%d", dims.namespaceCount, dims.namespaceCount*dims.podPerNamespaceCount, dims.nodeCount), func(b *testing.B) {
+			opts := []setupOption{withNodeNameAndNamespaceIndex}
+			ctx, cacher, _, terminate := testSetupWithEtcdServer(b, opts...)
+			b.Cleanup(terminate)
+			data := storagetesting.PrepareBenchmarkData(dims.namespaceCount, dims.podPerNamespaceCount, dims.nodeCount)
+			b.ResetTimer()
+			storagetesting.RunBenchmarkWriteThroughput(ctx, b, cacher, data, true)
 		})
 	}
 }
@@ -676,16 +776,10 @@ func BenchmarkStoreList(b *testing.B) {
 	}
 	for _, dims := range dimensions {
 		b.Run(fmt.Sprintf("Namespaces=%d/Pods=%d/Nodes=%d", dims.namespaceCount, dims.namespaceCount*dims.podPerNamespaceCount, dims.nodeCount), func(b *testing.B) {
-			data := storagetesting.PrepareBenchchmarkData(dims.namespaceCount, dims.podPerNamespaceCount, dims.nodeCount)
+			data := storagetesting.PrepareBenchmarkData(dims.namespaceCount, dims.podPerNamespaceCount, dims.nodeCount)
 			ctx, cacher, _, terminate := testSetupWithEtcdServer(b, withNodeNameAndNamespaceIndex)
 			b.Cleanup(terminate)
-			var out example.Pod
-			for _, pod := range data.Pods {
-				err := cacher.Create(ctx, computePodKey(pod), pod, &out, 0)
-				if err != nil {
-					b.Fatal(err)
-				}
-			}
+			require.NoError(b, storagetesting.PrecreateBenchmarkPods(ctx, cacher, data))
 			for _, useIndex := range []bool{true, false} {
 				b.Run(fmt.Sprintf("Indexed=%v", useIndex), func(b *testing.B) {
 					storagetesting.RunBenchmarkStoreList(ctx, b, cacher, data, useIndex)
@@ -697,7 +791,7 @@ func BenchmarkStoreList(b *testing.B) {
 
 func BenchmarkStoreStats(b *testing.B) {
 	klog.SetLogger(logr.Discard())
-	data := storagetesting.PrepareBenchchmarkData(50, 3_000, 5_000)
+	data := storagetesting.PrepareBenchmarkData(50, 3_000, 5_000)
 	ctx, cacher, _, terminate := testSetupWithEtcdServer(b)
 	b.Cleanup(terminate)
 	var out example.Pod

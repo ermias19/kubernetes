@@ -24,7 +24,7 @@ import (
 	"time"
 
 	v1 "k8s.io/api/core/v1"
-	schedulingapi "k8s.io/api/scheduling/v1alpha2"
+	schedulingapi "k8s.io/api/scheduling/v1alpha3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -151,8 +151,8 @@ func TestPodGroupScheduling(t *testing.T) {
 					CreatePods: []*v1.Pod{p1, p2},
 				},
 				{
-					Name:                         "Verify pods are gated at PreEnqueue (no quorum)",
-					WaitForPodsGatedOnPreEnqueue: []string{"p1", "p2"},
+					Name:                               "Verify pods are gated at PreEnqueue (no quorum)",
+					WaitForPodsInUnschedulableEntities: []string{"p1", "p2"},
 				},
 				{
 					Name:       "Create the last pod belonging to the gang to unblock PreEnqueue",
@@ -180,8 +180,8 @@ func TestPodGroupScheduling(t *testing.T) {
 					CreatePods: []*v1.Pod{p1, p2, p3},
 				},
 				{
-					Name:                         "Verify pods are gated at PreEnqueue (no PodGroup object)",
-					WaitForPodsGatedOnPreEnqueue: []string{"p1", "p2", "p3"},
+					Name:                               "Verify pods are gated at PreEnqueue (no PodGroup object)",
+					WaitForPodsInUnschedulableEntities: []string{"p1", "p2", "p3"},
 				},
 				{
 					Name:           "Create the PodGroup to unblock PreEnqueue",
@@ -382,8 +382,8 @@ func TestPodGroupScheduling(t *testing.T) {
 					CreatePods: []*v1.Pod{p1, p2, p3},
 				},
 				{
-					Name:                         "Verify pods are gated at PreEnqueue (no PodGroup object)",
-					WaitForPodsGatedOnPreEnqueue: []string{"p1", "p2", "p3"},
+					Name:                               "Verify pods are gated at PreEnqueue (no PodGroup object)",
+					WaitForPodsInUnschedulableEntities: []string{"p1", "p2", "p3"},
 				},
 				{
 					Name:           "Create the PodGroup to unblock PreEnqueue",
@@ -633,7 +633,7 @@ func TestWorkloadAwarePreemptionInvocation(t *testing.T) {
 
 	workload := st.MakeWorkload().Name("workload").PodGroupTemplate(st.MakePodGroupTemplate().Name("t1").MinCount(3).Obj()).Obj()
 	pg := st.MakePodGroup().Namespace("default").Name("pg1").TemplateRef("t1", "workload").
-		DisruptionMode(schedulingapi.DisruptionModePodGroup).Priority(100).MinCount(3).Obj()
+		DisruptionModeAll().Priority(100).MinCount(3).Obj()
 
 	// Low priority pods taking up all resources
 	lowPods := []*v1.Pod{
@@ -677,13 +677,13 @@ func TestWorkloadAwarePreemptionInvocation(t *testing.T) {
 	}
 
 	// 2. Create workload
-	if _, err := cs.SchedulingV1alpha2().Workloads(ns).Create(testCtx.Ctx, workload, metav1.CreateOptions{}); err != nil {
+	if _, err := cs.SchedulingV1alpha3().Workloads(ns).Create(testCtx.Ctx, workload, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Failed to create workload: %v", err)
 	}
 
 	// 3. Create PodGroup
 	pg.Namespace = ns
-	if _, err := cs.SchedulingV1alpha2().PodGroups(ns).Create(testCtx.Ctx, pg, metav1.CreateOptions{}); err != nil {
+	if _, err := cs.SchedulingV1alpha3().PodGroups(ns).Create(testCtx.Ctx, pg, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Failed to create PodGroup: %v", err)
 	}
 
@@ -744,7 +744,7 @@ func TestPostFilterInvocationCount(t *testing.T) {
 
 	workload := st.MakeWorkload().Name("workload").PodGroupTemplate(st.MakePodGroupTemplate().Name("t1").MinCount(3).Obj()).Obj()
 	pg := st.MakePodGroup().Namespace("default").Name("pg1").TemplateRef("t1", "workload").
-		DisruptionMode(schedulingapi.DisruptionModePodGroup).Priority(100).MinCount(3).Obj()
+		DisruptionModeAll().Priority(100).MinCount(3).Obj()
 
 	// Low priority pods taking up all resources
 	lowPods := []*v1.Pod{
@@ -783,8 +783,9 @@ func TestPostFilterInvocationCount(t *testing.T) {
 	})
 
 	testCtx := testutils.InitTestSchedulerWithNS(t, "post-filter-count",
-		scheduler.WithPodMaxBackoffSeconds(0),
-		scheduler.WithPodInitialBackoffSeconds(0),
+		// Set high backoff times so that the scheduler does not retry scheduling before checking the count.
+		scheduler.WithPodMaxBackoffSeconds(100),
+		scheduler.WithPodInitialBackoffSeconds(100),
 		scheduler.WithFrameworkOutOfTreeRegistry(registry),
 		scheduler.WithProfiles(cfg.Profiles...),
 	)
@@ -812,13 +813,13 @@ func TestPostFilterInvocationCount(t *testing.T) {
 	}
 
 	// 2. Create workload
-	if _, err := cs.SchedulingV1alpha2().Workloads(ns).Create(testCtx.Ctx, workload, metav1.CreateOptions{}); err != nil {
+	if _, err := cs.SchedulingV1alpha3().Workloads(ns).Create(testCtx.Ctx, workload, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Failed to create workload: %v", err)
 	}
 
 	// 3. Create PodGroup
 	pg.Namespace = ns
-	if _, err := cs.SchedulingV1alpha2().PodGroups(ns).Create(testCtx.Ctx, pg, metav1.CreateOptions{}); err != nil {
+	if _, err := cs.SchedulingV1alpha3().PodGroups(ns).Create(testCtx.Ctx, pg, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Failed to create PodGroup: %v", err)
 	}
 
@@ -830,11 +831,12 @@ func TestPostFilterInvocationCount(t *testing.T) {
 		}
 	}
 
-	// 5. Verify that MockPostFilter was called exactly 3 times
-	// It should be called for each pod from pod group in pod group cycle
+	// 5. Verify that MockPostFilter was called exactly once
+	// It should be called for each evaluated pod from pod group in pod group cycle
 	// but should not be called in WAP.
+	// Only one pod is evaluated for pod group because minCount=3 can't be satisfied with the remaining 2 pods.
 	err = wait.PollUntilContextTimeout(testCtx.Ctx, 100*time.Millisecond, 10*time.Second, false, func(ctx context.Context) (bool, error) {
-		if mockPlugin.count == 3 {
+		if mockPlugin.count == 1 {
 			return true, nil
 		}
 		return false, nil

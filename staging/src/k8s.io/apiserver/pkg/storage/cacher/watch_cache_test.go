@@ -1231,59 +1231,77 @@ func TestHistogramCacheReadWait(t *testing.T) {
 	testedMetrics := "apiserver_watch_cache_read_wait_seconds"
 	store := newTestWatchCache(2, DefaultEventFreshDuration, &cache.Indexers{})
 	defer store.Stop()
-
-	// In background, update the store.
-	go func() {
-		if err := store.Add(makeTestPod("foo", 2)); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-		if err := store.Add(makeTestPod("bar", 5)); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}()
+	fakeClock := store.clock.(*testingclock.FakeClock)
 
 	testCases := []struct {
 		desc            string
 		resourceVersion uint64
+		run             func(t *testing.T)
 		want            string
 	}{
 		{
 			desc:            "resourceVersion is non-zero",
 			resourceVersion: 5,
+			run: func(t *testing.T) {
+				if err := store.Add(makeTestPod("foo", 2)); err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+
+				getCompleted := make(chan struct{})
+				go func() {
+					defer close(getCompleted)
+					if _, _, _, err := store.WaitUntilFreshAndGet(ctx, 5, "prefix/ns/bar"); err != nil {
+						t.Errorf("unexpected error: %v", err)
+					}
+				}()
+
+				time.Sleep(10 * time.Millisecond)
+
+				fakeClock.Step(1 * time.Second)
+
+				if err := store.Add(makeTestPod("bar", 5)); err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+
+				<-getCompleted
+			},
 			want: `
-		# HELP apiserver_watch_cache_read_wait_seconds [ALPHA] Histogram of time spent waiting for a watch cache to become fresh.
-    # TYPE apiserver_watch_cache_read_wait_seconds histogram
-	    apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="0.005"} 1
-        apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="0.025"} 1
-        apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="0.05"} 1
-        apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="0.1"} 1
-        apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="0.2"} 1
-        apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="0.4"} 1
-        apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="0.6"} 1
-        apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="0.8"} 1
+		    # HELP apiserver_watch_cache_read_wait_seconds [ALPHA] Histogram of time spent waiting for a watch cache to become fresh.
+        # TYPE apiserver_watch_cache_read_wait_seconds histogram
+	      apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="0.005"} 0
+        apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="0.025"} 0
+        apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="0.05"} 0
+        apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="0.1"} 0
+        apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="0.2"} 0
+        apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="0.4"} 0
+        apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="0.6"} 0
+        apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="0.8"} 0
         apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="1"} 1
         apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="1.25"} 1
         apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="1.5"} 1
         apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="2"} 1
         apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="3"} 1
         apiserver_watch_cache_read_wait_seconds_bucket{group="",resource="pods",le="+Inf"} 1
-        apiserver_watch_cache_read_wait_seconds_sum{group="",resource="pods"} 0
+        apiserver_watch_cache_read_wait_seconds_sum{group="",resource="pods"} 1
         apiserver_watch_cache_read_wait_seconds_count{group="",resource="pods"} 1
 `,
 		},
 		{
 			desc:            "resourceVersion is 0",
 			resourceVersion: 0,
-			want:            ``,
+			run: func(t *testing.T) {
+				if _, _, _, err := store.WaitUntilFreshAndGet(ctx, 0, "prefix/ns/bar"); err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			},
+			want: ``,
 		},
 	}
 
 	for _, test := range testCases {
 		t.Run(test.desc, func(t *testing.T) {
 			defer registry.Reset()
-			if _, _, _, err := store.WaitUntilFreshAndGet(ctx, test.resourceVersion, "prefix/ns/bar"); err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
+			test.run(t)
 			if err := testutil.GatherAndCompare(registry, strings.NewReader(test.want), testedMetrics); err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -1314,7 +1332,7 @@ func TestCacheSnapshots(t *testing.T) {
 	assert.False(t, found, "Expected store to not include rev 99")
 	lister, found := s.snapshots.GetLessOrEqual(100)
 	assert.True(t, found, "Expected store to not include rev 100")
-	elements := lister.ListPrefix("", "")
+	elements := lister.OrderedListPrefix("", "")
 	assert.Len(t, elements, 1)
 	assert.Equal(t, makeTestPod("foo", 100), elements[0].(*store.Element).Object)
 
@@ -1326,20 +1344,20 @@ func TestCacheSnapshots(t *testing.T) {
 	t.Log("Test cache on rev 200")
 	lister, found = s.snapshots.GetLessOrEqual(200)
 	assert.True(t, found, "Expected store to still keep rev 200")
-	elements = lister.ListPrefix("", "")
+	elements = lister.OrderedListPrefix("", "")
 	assert.Len(t, elements, 1)
 	assert.Equal(t, makeTestPod("foo", 200), elements[0].(*store.Element).Object)
 
 	t.Log("Test cache on rev 300")
 	lister, found = s.snapshots.GetLessOrEqual(300)
 	assert.True(t, found, "Expected store to still keep rev 300")
-	elements = lister.ListPrefix("", "")
+	elements = lister.OrderedListPrefix("", "")
 	assert.Empty(t, elements)
 
 	t.Log("Test cache on rev 400")
 	lister, found = s.snapshots.GetLessOrEqual(400)
 	assert.True(t, found, "Expected store to still keep rev 400")
-	elements = lister.ListPrefix("", "")
+	elements = lister.OrderedListPrefix("", "")
 	assert.Len(t, elements, 1)
 	assert.Equal(t, makeTestPod("foo", 400), elements[0].(*store.Element).Object)
 
@@ -1355,7 +1373,7 @@ func TestCacheSnapshots(t *testing.T) {
 	t.Log("Test cache on rev 500")
 	lister, found = s.snapshots.GetLessOrEqual(500)
 	assert.True(t, found, "Expected store to still keep rev 500")
-	elements = lister.ListPrefix("", "")
+	elements = lister.OrderedListPrefix("", "")
 	assert.Len(t, elements, 1)
 	assert.Equal(t, makeTestPod("foo", 500), elements[0].(*store.Element).Object)
 
@@ -1367,7 +1385,7 @@ func TestCacheSnapshots(t *testing.T) {
 	t.Log("Test cache on rev 600")
 	lister, found = s.snapshots.GetLessOrEqual(600)
 	assert.True(t, found, "Expected replace to be snapshotted")
-	elements = lister.ListPrefix("", "")
+	elements = lister.OrderedListPrefix("", "")
 	assert.Len(t, elements, 1)
 	assert.Equal(t, makeTestPod("foo", 600), elements[0].(*store.Element).Object)
 
@@ -1384,7 +1402,7 @@ func TestCacheSnapshots(t *testing.T) {
 	t.Log("Test cache on rev 700")
 	lister, found = s.snapshots.GetLessOrEqual(700)
 	assert.True(t, found, "Expected replace to be snapshotted")
-	elements = lister.ListPrefix("", "")
+	elements = lister.OrderedListPrefix("", "")
 	assert.Len(t, elements, 1)
 	assert.Equal(t, makeTestPod("foo", 600), elements[0].(*store.Element).Object)
 }

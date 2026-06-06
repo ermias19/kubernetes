@@ -122,7 +122,7 @@ type watchCache struct {
 	// history" i.e. from the moment just after the newest cached watched event.
 	// It is necessary to effectively allow clients to start watching at now.
 	// NOTE: We assume that <store> is thread-safe.
-	store store.Indexer
+	store store.OrderedIndexer
 
 	// ResourceVersion up to which the watchCache is propagated.
 	resourceVersion uint64
@@ -332,13 +332,11 @@ func (w *watchCache) processEvent(event watch.Event, resourceVersion uint64, upd
 			return err
 		}
 		if w.snapshots != nil && w.snapshottingEnabled.Load() {
-			if orderedLister, ordered := w.store.(store.OrderedLister); ordered {
-				if w.isCacheFullLocked() {
-					oldestRV := w.cache[w.startIndex%w.capacity].ResourceVersion
-					w.snapshots.RemoveLess(oldestRV)
-				}
-				w.snapshots.Add(w.resourceVersion, orderedLister)
+			if w.isCacheFullLocked() {
+				oldestRV := w.cache[w.startIndex%w.capacity].ResourceVersion
+				w.snapshots.RemoveLess(oldestRV)
 			}
+			w.snapshots.Add(w.resourceVersion, w.store)
 		}
 		return err
 	}(); err != nil {
@@ -443,10 +441,12 @@ func (w *watchCache) List() []interface{} {
 	return w.store.List()
 }
 
-// waitUntilFreshAndBlock waits until cache is at least as fresh as given <resourceVersion>.
-// NOTE: This function acquired lock and doesn't release it.
-// You HAVE TO explicitly call w.RUnlock() after this function.
-func (w *watchCache) waitUntilFreshAndBlock(ctx context.Context, resourceVersion uint64) error {
+// waitUntilFreshLocked waits until cache is at least as fresh as given resourceVersion.
+func (w *watchCache) waitUntilFreshLocked(ctx context.Context, resourceVersion uint64) error {
+	if resourceVersion == 0 || resourceVersion <= w.resourceVersion {
+		return nil
+	}
+
 	startTime := w.clock.Now()
 	defer func() {
 		if resourceVersion > 0 {
@@ -475,7 +475,6 @@ func (w *watchCache) waitUntilFreshAndBlock(ctx context.Context, resourceVersion
 		}()
 	}
 
-	w.RLock()
 	span := tracing.SpanFromContext(ctx)
 	span.AddEvent("watchCache locked acquired")
 	for w.resourceVersion < resourceVersion {
@@ -538,15 +537,18 @@ func (c *watchCache) waitUntilFreshAndGetList(ctx context.Context, key string, o
 // WaitUntilFreshAndList returns list of pointers to `storeElement` objects along
 // with their ResourceVersion and the name of the index, if any, that was used.
 func (w *watchCache) WaitUntilFreshAndGetKeys(ctx context.Context, resourceVersion uint64) (keys []string, err error) {
-	if delegator.ConsistentReadSupported() && w.notFresh(resourceVersion) {
-		w.waitingUntilFresh.Add()
-		err = w.waitUntilFreshAndBlock(ctx, resourceVersion)
-		w.waitingUntilFresh.Remove()
-	} else {
-		err = w.waitUntilFreshAndBlock(ctx, resourceVersion)
-	}
-
+	consistentReadSupported := delegator.ConsistentReadSupported()
+	w.RLock()
 	defer w.RUnlock()
+	if resourceVersion > 0 && resourceVersion > w.resourceVersion {
+		if consistentReadSupported {
+			w.waitingUntilFresh.Add()
+			err = w.waitUntilFreshLocked(ctx, resourceVersion)
+			w.waitingUntilFresh.Remove()
+		} else {
+			err = w.waitUntilFreshLocked(ctx, resourceVersion)
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -590,14 +592,18 @@ func (w *watchCache) waitUntilFreshAndList(ctx context.Context, key string, opts
 }
 
 func (w *watchCache) waitAndListExactRV(ctx context.Context, key, continueKey string, resourceVersion uint64) (resp listResp, index string, err error) {
-	if delegator.ConsistentReadSupported() && w.notFresh(resourceVersion) {
-		w.waitingUntilFresh.Add()
-		err = w.waitUntilFreshAndBlock(ctx, resourceVersion)
-		w.waitingUntilFresh.Remove()
-	} else {
-		err = w.waitUntilFreshAndBlock(ctx, resourceVersion)
-	}
+	consistentReadSupported := delegator.ConsistentReadSupported()
+	w.RLock()
 	defer w.RUnlock()
+	if resourceVersion > 0 && resourceVersion > w.resourceVersion {
+		if consistentReadSupported {
+			w.waitingUntilFresh.Add()
+			err = w.waitUntilFreshLocked(ctx, resourceVersion)
+			w.waitingUntilFresh.Remove()
+		} else {
+			err = w.waitUntilFreshLocked(ctx, resourceVersion)
+		}
+	}
 	if err != nil {
 		return listResp{}, "", err
 	}
@@ -609,7 +615,7 @@ func (w *watchCache) waitAndListExactRV(ctx context.Context, key, continueKey st
 	if !ok {
 		return listResp{}, "", errors.NewResourceExpired(fmt.Sprintf("too old resource version: %d", resourceVersion))
 	}
-	items := store.ListPrefix(key, continueKey)
+	items := store.OrderedListPrefix(key, continueKey)
 	return listResp{
 		Items:           items,
 		ResourceVersion: resourceVersion,
@@ -625,14 +631,18 @@ func (w *watchCache) waitAndListConsistent(ctx context.Context, key, continueKey
 }
 
 func (w *watchCache) waitAndListLatestRV(ctx context.Context, resourceVersion uint64, key, continueKey string, matchValues []storage.MatchValue) (resp listResp, index string, err error) {
-	if delegator.ConsistentReadSupported() && w.notFresh(resourceVersion) {
-		w.waitingUntilFresh.Add()
-		err = w.waitUntilFreshAndBlock(ctx, resourceVersion)
-		w.waitingUntilFresh.Remove()
-	} else {
-		err = w.waitUntilFreshAndBlock(ctx, resourceVersion)
-	}
+	consistentReadSupported := delegator.ConsistentReadSupported()
+	w.RLock()
 	defer w.RUnlock()
+	if resourceVersion > 0 && resourceVersion > w.resourceVersion {
+		if consistentReadSupported {
+			w.waitingUntilFresh.Add()
+			err = w.waitUntilFreshLocked(ctx, resourceVersion)
+			w.waitingUntilFresh.Remove()
+		} else {
+			err = w.waitUntilFreshLocked(ctx, resourceVersion)
+		}
+	}
 	if err != nil {
 		return listResp{}, "", err
 	}
@@ -653,19 +663,11 @@ func (w *watchCache) listLatestRV(key, continueKey string, matchValues []storage
 			}, matchValue.IndexName, err
 		}
 	}
-	if store, ok := w.store.(store.OrderedLister); ok {
-		result := store.ListPrefix(key, continueKey)
-		return listResp{
-			Items:           result,
-			ResourceVersion: w.resourceVersion,
-		}, "", nil
-	}
-	result := w.store.List()
-	result, err = filterPrefixAndOrder(key, result)
+	result := w.store.OrderedListPrefix(key, continueKey)
 	return listResp{
 		Items:           result,
 		ResourceVersion: w.resourceVersion,
-	}, "", err
+	}, "", nil
 }
 
 func filterPrefixAndOrder(prefix string, items []interface{}) ([]interface{}, error) {
@@ -693,14 +695,18 @@ func (w *watchCache) notFresh(resourceVersion uint64) bool {
 // WaitUntilFreshAndGet returns a pointers to <storeElement> object.
 func (w *watchCache) WaitUntilFreshAndGet(ctx context.Context, resourceVersion uint64, key string) (interface{}, bool, uint64, error) {
 	var err error
-	if delegator.ConsistentReadSupported() && w.notFresh(resourceVersion) {
-		w.waitingUntilFresh.Add()
-		err = w.waitUntilFreshAndBlock(ctx, resourceVersion)
-		w.waitingUntilFresh.Remove()
-	} else {
-		err = w.waitUntilFreshAndBlock(ctx, resourceVersion)
-	}
+	consistentReadSupported := delegator.ConsistentReadSupported()
+	w.RLock()
 	defer w.RUnlock()
+	if resourceVersion > 0 && resourceVersion > w.resourceVersion {
+		if consistentReadSupported {
+			w.waitingUntilFresh.Add()
+			err = w.waitUntilFreshLocked(ctx, resourceVersion)
+			w.waitingUntilFresh.Remove()
+		} else {
+			err = w.waitUntilFreshLocked(ctx, resourceVersion)
+		}
+	}
 	if err != nil {
 		return nil, false, 0, err
 	}
@@ -778,8 +784,8 @@ func (w *watchCache) Replace(objs []interface{}, resourceVersion string) error {
 	}
 	if w.snapshots != nil {
 		w.snapshots.Reset()
-		if orderedLister, ordered := w.store.(store.OrderedLister); ordered && w.snapshottingEnabled.Load() {
-			w.snapshots.Add(version, orderedLister)
+		if w.snapshottingEnabled.Load() {
+			w.snapshots.Add(version, w.store)
 		}
 	}
 	w.listResourceVersion = version

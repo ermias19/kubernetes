@@ -1,8 +1,8 @@
-apiVersion: scheduling.k8s.io/v1alpha2
+apiVersion: scheduling.k8s.io/v1alpha3
 kind: PodGroup
 metadata:
   name: gang-{{.Index}}
 spec:
   schedulingPolicy:
     gang:
-      minCount: 3
+      minCount: {{.podsPerGroup}}

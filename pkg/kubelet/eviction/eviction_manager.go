@@ -143,11 +143,10 @@ func NewManager(
 }
 
 // Admit rejects a pod if its not safe to admit for node stability.
-func (m *managerImpl) Admit(attrs *lifecycle.PodAdmitAttributes) lifecycle.PodAdmitResult {
+func (m *managerImpl) Admit(ctx context.Context, attrs *lifecycle.PodAdmitAttributes) lifecycle.PodAdmitResult {
 	m.RLock()
 	defer m.RUnlock()
 
-	ctx := context.Background()
 	logger := klog.FromContext(ctx)
 
 	if len(m.nodeConditions) == 0 {
@@ -635,6 +634,7 @@ func (m *managerImpl) evictPod(logger klog.Logger, pod *v1.Pod, gracePeriodOverr
 		return false
 	}
 	// record that we are evicting the pod
+	//nolint:forbidigo // Legacy usage
 	m.recorder.AnnotatedEventf(pod, annotations, v1.EventTypeWarning, Reason, "%s", evictMsg)
 	// this is a blocking call and should only return when the pod and its containers are killed.
 	logger.V(3).Info("Evicting pod", "pod", klog.KObj(pod), "podUID", pod.UID, "message", evictMsg)
