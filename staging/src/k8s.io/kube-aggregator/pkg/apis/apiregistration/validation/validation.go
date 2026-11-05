@@ -34,23 +34,30 @@ import (
 
 // ValidateAPIService validates that the APIService is correctly defined.
 func ValidateAPIService(ctx context.Context, apiService *apiregistration.APIService) field.ErrorList {
-	requiredName := apiService.Spec.Version + "." + apiService.Spec.Group
-
 	allErrs := validation.ValidateObjectMetaDeclaratively(ctx, operation.Create, &apiService.ObjectMeta, nil, false,
-		func(name string, prefix bool) []string {
-			if minimalFailures := content.IsPathSegmentName(name); len(minimalFailures) > 0 {
-				return minimalFailures
-			}
-			// the name *must* be version.group
-			if name != requiredName {
-				return []string{fmt.Sprintf("must be `spec.version+\".\"+spec.group`: %q", requiredName)}
-			}
-
-			return []string{}
-		},
+		apiServiceNameFunc(apiService),
 		field.NewPath("metadata"),
 		utilfeature.DefaultFeatureGate.Enabled(features.DeclarativeValidationBeta))
+	return append(allErrs, validateAPIServiceSpec(apiService)...)
+}
 
+func apiServiceNameFunc(apiService *apiregistration.APIService) validation.ValidateNameFunc {
+	requiredName := apiService.Spec.Version + "." + apiService.Spec.Group
+	return func(name string, prefix bool) []string {
+		if minimalFailures := content.IsPathSegmentName(name); len(minimalFailures) > 0 {
+			return minimalFailures
+		}
+		// the name *must* be version.group
+		if name != requiredName {
+			return []string{fmt.Sprintf("must be `spec.version+\".\"+spec.group`: %q", requiredName)}
+		}
+
+		return []string{}
+	}
+}
+
+func validateAPIServiceSpec(apiService *apiregistration.APIService) field.ErrorList {
+	var allErrs field.ErrorList
 	// in this case we allow empty group
 	if len(apiService.Spec.Group) == 0 && apiService.Spec.Version != "v1" {
 		allErrs = append(allErrs, field.Required(field.NewPath("spec", "group"), "only v1 may have an empty group and it better be legacy kube"))
@@ -100,8 +107,24 @@ func ValidateAPIService(ctx context.Context, apiService *apiregistration.APIServ
 
 // ValidateAPIServiceUpdate validates an update of APIService.
 func ValidateAPIServiceUpdate(ctx context.Context, newAPIService *apiregistration.APIService, oldAPIService *apiregistration.APIService) field.ErrorList {
-	allErrs := validation.ValidateObjectMetaDeclaratively(ctx, operation.Update, &newAPIService.ObjectMeta, &oldAPIService.ObjectMeta, false, nil, field.NewPath("metadata"), utilfeature.DefaultFeatureGate.Enabled(features.DeclarativeValidationBeta))
-	allErrs = append(allErrs, ValidateAPIService(ctx, newAPIService)...)
+	fldPath := field.NewPath("metadata")
+	allErrs := validation.ValidateObjectMetaDeclaratively(ctx, operation.Update, &newAPIService.ObjectMeta, &oldAPIService.ObjectMeta, false, nil, fldPath, utilfeature.DefaultFeatureGate.Enabled(features.DeclarativeValidationBeta))
+
+	// The update metadata validation already covers labels, annotations, owner references and
+	// managed fields; running the create validation as well would report those errors twice.
+	// It does not cover the rest, and the name must still match spec.version and spec.group,
+	// which may have changed.
+	nameFn := apiServiceNameFunc(newAPIService)
+	if len(newAPIService.GenerateName) != 0 {
+		for _, msg := range nameFn(newAPIService.GenerateName, true) {
+			allErrs = append(allErrs, field.Invalid(fldPath.Child("generateName"), newAPIService.GenerateName, msg))
+		}
+	}
+	for _, msg := range nameFn(newAPIService.Name, false) {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("name"), newAPIService.Name, msg))
+	}
+	allErrs = append(allErrs, validation.ValidateFinalizers(newAPIService.Finalizers, fldPath.Child("finalizers"))...)
+	allErrs = append(allErrs, validateAPIServiceSpec(newAPIService)...)
 
 	return allErrs
 }

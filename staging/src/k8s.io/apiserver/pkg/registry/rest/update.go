@@ -89,7 +89,7 @@ type RESTUpdateStrategy interface {
 }
 
 // TODO: add other common fields that require global validation.
-func validateCommonFields(obj, old runtime.Object, strategy RESTUpdateStrategy) field.ErrorList {
+func validateCommonFields(obj, old runtime.Object) field.ErrorList {
 	allErrs := field.ErrorList{}
 	objectMeta, err := meta.Accessor(obj)
 	if err != nil {
@@ -101,8 +101,22 @@ func validateCommonFields(obj, old runtime.Object, strategy RESTUpdateStrategy) 
 		allErrs = append(allErrs, field.InternalError(field.NewPath("metadata"), fmt.Errorf("failed to get old object metadata: %w", err)))
 		return allErrs
 	}
-	allErrs = append(allErrs, genericvalidation.ValidateObjectMetaAccessor(objectMeta, strategy.NamespaceScoped(), validatePathSegment, field.NewPath("metadata"))...)
-	allErrs = append(allErrs, genericvalidation.ValidateObjectMetaAccessorUpdate(objectMeta, oldObjectMeta, field.NewPath("metadata"))...)
+	fldPath := field.NewPath("metadata")
+	allErrs = append(allErrs, genericvalidation.ValidateObjectMetaAccessorUpdate(objectMeta, oldObjectMeta, fldPath)...)
+
+	// ValidateObjectMetaAccessorUpdate already covers labels, annotations, owner references,
+	// managed fields and generation, so ValidateObjectMetaAccessor is not called here: doing
+	// so reported each of those errors twice. Only the fields it leaves out are checked.
+	// Namespace needs no check: it is immutable, and BeforeUpdate matches it to the request.
+	if generateName := objectMeta.GetGenerateName(); len(generateName) > 0 {
+		for _, msg := range validatePathSegment(generateName, true) {
+			allErrs = append(allErrs, field.Invalid(fldPath.Child("generateName"), generateName, msg))
+		}
+	}
+	for _, msg := range validatePathSegment(objectMeta.GetName(), false) {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("name"), objectMeta.GetName(), msg))
+	}
+	allErrs = append(allErrs, genericvalidation.ValidateFinalizers(objectMeta.GetFinalizers(), fldPath.Child("finalizers"))...)
 
 	return allErrs
 }
@@ -169,11 +183,16 @@ func BeforeUpdate(strategy RESTUpdateStrategy, ctx context.Context, obj, old run
 // ValidateUpdate performs common and strategy-specific validation for an update operation.
 func ValidateUpdate(ctx context.Context, obj runtime.Object, old runtime.Object, strategy RESTUpdateStrategy) field.ErrorList {
 
-	// TODO: Replace this check with the ObjectMeta name validation (validatePathSegment) once we are sure that all other validations are covered by strategy.Validate and strategy.ValidateDeclaratively.
-	// Ensure some common fields, like UID, are validated for all resources.
-	errs := validateCommonFields(obj, old, strategy)
+	errs := strategy.ValidateUpdate(ctx, obj, old)
 
-	errs = append(errs, strategy.ValidateUpdate(ctx, obj, old)...)
+	if len(errs) == 0 {
+		// TODO: Replace this check with the ObjectMeta name validation (validatePathSegment) once we are sure that all other validations are covered by strategy.Validate and strategy.ValidateDeclaratively.
+		// Ensure some common fields, like UID, are validated for all resources.
+		// Run after strategy validation, as ValidateCreate does: most strategies validate
+		// ObjectMeta themselves, and running both reports every metadata error twice.
+		errs = validateCommonFields(obj, old)
+	}
+
 	if dv, ok := strategy.(DeclarativeValidationStrategy); ok {
 		errs = dv.ValidateDeclaratively(ctx, obj, old, errs, operation.Update, dv.DeclarativeValidationConfig(ctx, obj, old))
 	}
